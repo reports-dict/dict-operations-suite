@@ -1,0 +1,41 @@
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: dict_ops_app
+    restart: unless-stopped
+    working_dir: /var/www
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    volumes:
+      - .:/var/www
+      - node_modules:/var/www/node_modules
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    networks:
+      - dict_ops_net
+      - mysql8_default
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: dict_ops_nginx
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - dict_ops_net
+    depends_on:
+      - app
+
+networks:
+  dict_ops_net:
+    driver: bridge
+  mysql8_default:
+    external: true
+
+volumes:
+  node_modules:

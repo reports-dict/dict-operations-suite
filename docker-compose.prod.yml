@@ -1,0 +1,52 @@
+name: dict-operations-suite-prod
+
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: dict_ops_app_prod
+    restart: unless-stopped
+    working_dir: /var/www
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    env_file: .env.production
+    volumes:
+      - app_public:/var/www/public
+    networks:
+      - dict_ops_prod_net
+      - db_network
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: dict_ops_nginx_prod
+    restart: unless-stopped
+    ports:
+      - "9754:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - app_public:/var/www/public:ro
+    depends_on:
+      - app
+    networks:
+      - dict_ops_prod_net
+
+networks:
+  dict_ops_prod_net:
+    driver: bridge
+  # Already exists on the production host - whatever runs the production
+  # MySQL container is attached to it. Joined here so the app container can
+  # reach it; DB_HOST in .env.production still uses the fixed IP
+  # (192.168.11.62), not a container name, so this doesn't change how the
+  # connection resolves - it's required for the network path to exist at all.
+  db_network:
+    external: true
+
+volumes:
+  # Populated from the app image's /var/www/public on first start (Docker
+  # copies a named volume's mount point contents from the image the first
+  # time it's used) - nginx serves static assets straight from it read-only
+  # rather than reaching into the app container or needing its own copy of
+  # the source.
+  app_public:
