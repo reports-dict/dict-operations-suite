@@ -3,6 +3,7 @@ name: dict-operations-suite-prod
 services:
 
   app:
+    image: dict-operations-suite-prod:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -17,6 +18,35 @@ services:
     networks:
       - dict_ops_prod_net
       - db_network
+
+  # Drives routes/console.php's Schedule:: definitions (Road Queue/ECD
+  # capture, purge-history, sync-driver-assignment, sync-vessel-dashboard).
+  # Split into its own container rather than the entrypoint.prod.sh-embedded
+  # loop the app container used before, so scaling/restarting the web
+  # container doesn't affect scheduling (and vice versa), and so there's
+  # never more than one scheduler running at a time even if `app` is scaled
+  # to multiple replicas. Reuses the same image as `app` (same `image:` tag
+  # above, so `docker compose build` only builds it once) - just overrides
+  # the entrypoint to skip php-fpm/`/entrypoint.sh` and run the scheduler
+  # loop directly instead. `schedule:work` is Laravel's built-in equivalent
+  # of the old `while true; do schedule:run; sleep 60; done` loop - it sleeps
+  # until the next due task rather than polling blindly every 60s.
+  scheduler:
+    image: dict-operations-suite-prod:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: dict_ops_scheduler_prod
+    restart: unless-stopped
+    working_dir: /var/www
+    entrypoint: ["/bin/sh", "-c", "php artisan schedule:work"]
+    env_file: .env.production
+    networks:
+      - dict_ops_prod_net
+      - db_network
+    depends_on:
+      - app
 
   nginx:
     image: nginx:1.25-alpine
