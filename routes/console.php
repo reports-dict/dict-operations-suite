@@ -18,3 +18,28 @@ Schedule::command('operations:sync-driver-assignment')->dailyAt('19:00');
 Schedule::command('operations:sync-driver-assignment')->dailyAt('20:00');
 
 Schedule::command('operations:sync-vessel-dashboard')->hourly();
+
+// Keeps history accumulating even when no one has the public kiosk board
+// open in a browser (the board's own load/60s-poll also captures a
+// snapshot - see RoadQueueBoardController / RoadQueueEcdBoardController).
+// High-elapsed monitoring is live and needs frequent polling; TAT only
+// reflects the previous *completed* shift (fixed the instant it ends), so
+// it's scheduled around shift boundaries instead of every minute to avoid
+// hammering the read-only sparcsn4 connection for data that can't change.
+Schedule::command('operations:capture-road-queue --only-high-elapsed')->everyMinute();
+Schedule::command('operations:capture-road-queue-ecd --only-high-elapsed')->everyMinute();
+
+// Shift start + one-hour catch-up, both shifts (Day 07:00-19:00 / Night
+// 19:00-07:00), explicitly pinned to Asia/Manila - see
+// PreviousShiftCalculator::current(). Unlike operations:sync-driver-assignment
+// above, ->timezone() is set here since config('app.timezone') is UTC and
+// would otherwise fire these 8h off from actual shift boundaries.
+Schedule::command('operations:capture-road-queue --only-tat')->timezone('Asia/Manila')->dailyAt('07:00');
+Schedule::command('operations:capture-road-queue --only-tat')->timezone('Asia/Manila')->dailyAt('08:00');
+Schedule::command('operations:capture-road-queue --only-tat')->timezone('Asia/Manila')->dailyAt('19:00');
+Schedule::command('operations:capture-road-queue --only-tat')->timezone('Asia/Manila')->dailyAt('20:00');
+
+Schedule::command('operations:capture-road-queue-ecd --only-tat')->timezone('Asia/Manila')->dailyAt('07:00');
+Schedule::command('operations:capture-road-queue-ecd --only-tat')->timezone('Asia/Manila')->dailyAt('08:00');
+Schedule::command('operations:capture-road-queue-ecd --only-tat')->timezone('Asia/Manila')->dailyAt('19:00');
+Schedule::command('operations:capture-road-queue-ecd --only-tat')->timezone('Asia/Manila')->dailyAt('20:00');
