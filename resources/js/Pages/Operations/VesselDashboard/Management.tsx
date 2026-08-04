@@ -6,9 +6,13 @@ import Card from '@/Components/ui/Card';
 import Input from '@/Components/ui/Input';
 import Label from '@/Components/ui/Label';
 import Pagination, { PaginationLink } from '@/Components/ui/Pagination';
+import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DashboardDataResponse, VesselSyncLogRow, VesselVisit } from './types';
+
+const OVERRIDES_PAGE_SIZE = 10;
 
 interface Stats {
     total_visits: number;
@@ -114,10 +118,94 @@ function OverrideForm({ vessel, onDone }: { vessel: VesselVisit; onDone: () => v
     );
 }
 
+// Client-side pager for VesselOverridePanel - the vessel list comes from a
+// plain fetch() to /operations/vessel-dashboard/data (not Inertia props), so
+// the Inertia-Link-driven Components/ui/Pagination doesn't apply; this just
+// slices the already-fetched array instead of round-tripping to the server.
+function ClientPagination({
+    page,
+    totalPages,
+    total,
+    pageSize,
+    onPageChange,
+}: {
+    page: number;
+    totalPages: number;
+    total: number;
+    pageSize: number;
+    onPageChange: (page: number) => void;
+}) {
+    if (total === 0) return null;
+
+    const from = (page - 1) * pageSize + 1;
+    const to = Math.min(page * pageSize, total);
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+    return (
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+                Showing <span className="font-medium text-slate-700 dark:text-slate-300">{from}</span>&ndash;
+                <span className="font-medium text-slate-700 dark:text-slate-300">{to}</span> of{' '}
+                <span className="font-medium text-slate-700 dark:text-slate-300">{total}</span>
+            </p>
+
+            <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
+                <PageButton disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Previous page">
+                    <ChevronLeft className="size-3.5" />
+                </PageButton>
+
+                {pages.map((p) => (
+                    <PageButton key={p} active={p === page} onClick={() => onPageChange(p)}>
+                        {p}
+                    </PageButton>
+                ))}
+
+                <PageButton disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} aria-label="Next page">
+                    <ChevronRight className="size-3.5" />
+                </PageButton>
+            </div>
+        </div>
+    );
+}
+
+function PageButton({
+    active,
+    disabled,
+    onClick,
+    children,
+    ...rest
+}: {
+    active?: boolean;
+    disabled?: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+    'aria-label'?: string;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={cn(
+                'flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md px-1.5 text-xs font-medium',
+                active
+                    ? 'bg-green-600 text-white'
+                    : disabled
+                      ? 'cursor-not-allowed text-slate-300 dark:text-slate-700'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+            )}
+            {...rest}
+        >
+            {children}
+        </button>
+    );
+}
+
 function VesselOverridePanel() {
     const [vessels, setVessels] = useState<VesselVisit[]>([]);
     const [editing, setEditing] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
 
     const fetchVessels = () => {
         setLoading(true);
@@ -134,9 +222,13 @@ function VesselOverridePanel() {
     if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading vessels…</p>;
     if (!vessels.length) return <p className="text-sm text-slate-500 dark:text-slate-400">No active vessel visits.</p>;
 
+    const totalPages = Math.max(1, Math.ceil(vessels.length / OVERRIDES_PAGE_SIZE));
+    const currentPage = Math.min(page, totalPages);
+    const paginatedVessels = vessels.slice((currentPage - 1) * OVERRIDES_PAGE_SIZE, currentPage * OVERRIDES_PAGE_SIZE);
+
     return (
         <div className="flex flex-col gap-3">
-            {vessels.map((vessel) => (
+            {paginatedVessels.map((vessel) => (
                 <Card key={vessel.ob_ib_id} className="p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -175,6 +267,13 @@ function VesselOverridePanel() {
                     )}
                 </Card>
             ))}
+            <ClientPagination
+                page={currentPage}
+                totalPages={totalPages}
+                total={vessels.length}
+                pageSize={OVERRIDES_PAGE_SIZE}
+                onPageChange={setPage}
+            />
         </div>
     );
 }
@@ -239,6 +338,11 @@ export default function VesselDashboardManagement({ stats, logs }: Props) {
                 ))}
             </div>
 
+            <div className="mb-6">
+                <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-white">Planned Figure Overrides</h2>
+                <VesselOverridePanel />
+            </div>
+
             <Card className="mb-6 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -281,9 +385,6 @@ export default function VesselDashboardManagement({ stats, logs }: Props) {
                 </div>
                 <Pagination links={logs.links} from={logs.from} to={logs.to} total={logs.total} />
             </Card>
-
-            <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-white">Planned Figure Overrides</h2>
-            <VesselOverridePanel />
         </AppLayout>
     );
 }

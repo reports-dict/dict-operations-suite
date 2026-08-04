@@ -1,6 +1,8 @@
+import { ArrowLeftRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ProgressBar from '@/Components/ProgressBar';
 import VesselBarChart from '@/Components/VesselBarChart';
+import { useNarrowViewport } from '@/hooks/useNarrowViewport';
 import { VesselVisit } from '@/Pages/Operations/VesselDashboard/types';
 
 function useElapsed(dateStr: string | null) {
@@ -43,6 +45,36 @@ const groupHead =
 const sectionRow = 'text-sm sm:text-xl lg:text-3xl font-extrabold uppercase tracking-widest px-1 sm:px-2 py-0.5';
 const totalLabel = 'text-xs sm:text-lg lg:text-2xl font-bold tracking-widest uppercase';
 const totalValue = 'text-sm sm:text-xl lg:text-4xl font-extrabold';
+
+// Shared by StatTable (lg: and up) and StatCards (below lg) so the two
+// "Total Planned / Total Done / Balance" summary rows stay in sync.
+function TotalsRow({
+    plannedLabel,
+    plannedValue,
+    doneLabel,
+    doneValue,
+    balanceValue,
+}: {
+    plannedLabel: string;
+    plannedValue: number;
+    doneLabel: string;
+    doneValue: number;
+    balanceValue: number;
+}) {
+    return (
+        <div className="flex flex-wrap items-center justify-between gap-x-3">
+            <span className={`${totalLabel} text-blue-500`}>
+                {plannedLabel}: <span className={`text-blue-300 ${totalValue}`}>{plannedValue}</span>
+            </span>
+            <span className={`${totalLabel} text-green-600`}>
+                {doneLabel}: <span className={`text-green-400 ${totalValue}`}>{doneValue}</span>
+            </span>
+            <span className={`${totalLabel} text-yellow-600`}>
+                Balance: <span className={`text-yellow-300 ${totalValue}`}>{balanceValue}</span>
+            </span>
+        </div>
+    );
+}
 
 function StatTable({ vessel }: { vessel: VesselVisit }) {
     return (
@@ -100,20 +132,13 @@ function StatTable({ vessel }: { vessel: VesselVisit }) {
                     </tr>
                     <tr className="border-b border-amber-700/30 bg-amber-900/10">
                         <td colSpan={5} className="px-1 py-0.5 sm:px-2">
-                            <div className="flex flex-wrap items-center justify-between gap-x-3">
-                                <span className={`${totalLabel} text-blue-500`}>
-                                    Total Planned: <span className={`text-blue-300 ${totalValue}`}>{vessel.total_planned_discharge}</span>
-                                </span>
-                                <span className={`${totalLabel} text-green-600`}>
-                                    Total Disch: <span className={`text-green-400 ${totalValue}`}>{vessel.total_discharged_count}</span>
-                                </span>
-                                <span className={`${totalLabel} text-yellow-600`}>
-                                    Balance:{' '}
-                                    <span className={`text-yellow-300 ${totalValue}`}>
-                                        {bal(vessel.total_planned_discharge, vessel.total_discharged_count)}
-                                    </span>
-                                </span>
-                            </div>
+                            <TotalsRow
+                                plannedLabel="Total Planned"
+                                plannedValue={vessel.total_planned_discharge}
+                                doneLabel="Total Disch"
+                                doneValue={vessel.total_discharged_count}
+                                balanceValue={bal(vessel.total_planned_discharge, vessel.total_discharged_count)}
+                            />
                         </td>
                     </tr>
 
@@ -146,24 +171,151 @@ function StatTable({ vessel }: { vessel: VesselVisit }) {
                     </tr>
                     <tr className="border-b border-cyan-700/30 bg-cyan-900/10">
                         <td colSpan={5} className="px-1 py-0.5 sm:px-2">
-                            <div className="flex flex-wrap items-center justify-between gap-x-3">
-                                <span className={`${totalLabel} text-blue-500`}>
-                                    Total Planned: <span className={`text-blue-300 ${totalValue}`}>{vessel.total_planned_loading_wi}</span>
-                                </span>
-                                <span className={`${totalLabel} text-green-600`}>
-                                    Total Loaded: <span className={`text-green-400 ${totalValue}`}>{vessel.total_loaded_count}</span>
-                                </span>
-                                <span className={`${totalLabel} text-yellow-600`}>
-                                    Balance:{' '}
-                                    <span className={`text-yellow-300 ${totalValue}`}>
-                                        {bal(vessel.total_planned_loading_wi, vessel.total_loaded_count)}
-                                    </span>
-                                </span>
-                            </div>
+                            <TotalsRow
+                                plannedLabel="Total Planned"
+                                plannedValue={vessel.total_planned_loading_wi}
+                                doneLabel="Total Loaded"
+                                doneValue={vessel.total_loaded_count}
+                                balanceValue={bal(vessel.total_planned_loading_wi, vessel.total_loaded_count)}
+                            />
                         </td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+// Mobile/tablet-only stand-in for StatTable (below lg) - a dense
+// multi-column table is unreadable on a phone, so this reshapes the same
+// figures into stacked per-section cards instead of squeezing table columns.
+function StatRowCard({
+    label,
+    labelColor,
+    valueColor,
+    fcl20,
+    mty20,
+    fcl40,
+    mty40,
+}: {
+    label: string;
+    labelColor: string;
+    valueColor: string;
+    fcl20: number;
+    mty20: number;
+    fcl40: number;
+    mty40: number;
+}) {
+    const values: [string, number][] = [
+        ['20 FCL', fcl20],
+        ['20 MTY', mty20],
+        ['40 FCL', fcl40],
+        ['40 MTY', mty40],
+    ];
+
+    return (
+        <div className="flex items-center justify-between gap-2 rounded-md bg-slate-800/40 px-2 py-1.5">
+            <span className={`w-16 shrink-0 text-xs font-bold tracking-wide uppercase ${labelColor}`}>{label}</span>
+            <div className="grid flex-1 grid-cols-4 gap-1 text-center">
+                {values.map(([hdr, val]) => (
+                    <div key={hdr}>
+                        <div className="text-[9px] text-slate-500 uppercase">{hdr}</div>
+                        <div className={`text-sm font-extrabold ${valueColor}`}>{val}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function StatCards({ vessel }: { vessel: VesselVisit }) {
+    return (
+        <div className="flex h-full flex-col gap-3 overflow-y-auto">
+            {/* Discharging */}
+            <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 p-2">
+                <p className="px-1 py-1 text-sm font-extrabold tracking-widest text-amber-400 uppercase">Discharging</p>
+                <div className="flex flex-col gap-1.5">
+                    <StatRowCard
+                        label="Planned"
+                        labelColor="text-blue-400"
+                        valueColor="text-blue-300"
+                        fcl20={vessel.discharge_plan_fcl_20ft}
+                        mty20={vessel.discharge_plan_mty_20ft}
+                        fcl40={vessel.discharge_plan_fcl_40ft}
+                        mty40={vessel.discharge_plan_mty_40ft}
+                    />
+                    <StatRowCard
+                        label="Discharged"
+                        labelColor="text-green-400"
+                        valueColor="text-green-300"
+                        fcl20={vessel.discharged_fcl_20ft}
+                        mty20={vessel.discharged_empty_20ft}
+                        fcl40={vessel.discharged_fcl_40ft}
+                        mty40={vessel.discharged_empty_40ft}
+                    />
+                    <StatRowCard
+                        label="Balance"
+                        labelColor="text-yellow-400"
+                        valueColor="text-yellow-300"
+                        fcl20={bal(vessel.discharge_plan_fcl_20ft, vessel.discharged_fcl_20ft)}
+                        mty20={bal(vessel.discharge_plan_mty_20ft, vessel.discharged_empty_20ft)}
+                        fcl40={bal(vessel.discharge_plan_fcl_40ft, vessel.discharged_fcl_40ft)}
+                        mty40={bal(vessel.discharge_plan_mty_40ft, vessel.discharged_empty_40ft)}
+                    />
+                </div>
+                <div className="mt-1.5 px-1">
+                    <TotalsRow
+                        plannedLabel="Total Planned"
+                        plannedValue={vessel.total_planned_discharge}
+                        doneLabel="Total Disch"
+                        doneValue={vessel.total_discharged_count}
+                        balanceValue={bal(vessel.total_planned_discharge, vessel.total_discharged_count)}
+                    />
+                </div>
+            </div>
+
+            {/* Loading */}
+            <div className="rounded-lg border border-cyan-700/40 bg-cyan-900/10 p-2">
+                <p className="px-1 py-1 text-sm font-extrabold tracking-widest text-cyan-400 uppercase">Loading</p>
+                <div className="flex flex-col gap-1.5">
+                    <StatRowCard
+                        label="Planned"
+                        labelColor="text-blue-400"
+                        valueColor="text-blue-300"
+                        fcl20={vessel.load_plan_fcl_20ft}
+                        mty20={vessel.load_plan_empty_20ft}
+                        fcl40={vessel.load_plan_fcl_40ft}
+                        mty40={vessel.load_plan_empty_40ft}
+                    />
+                    <StatRowCard
+                        label="Loaded"
+                        labelColor="text-green-400"
+                        valueColor="text-green-300"
+                        fcl20={vessel.loaded_fcl_20ft}
+                        mty20={vessel.loaded_empty_20ft}
+                        fcl40={vessel.loaded_fcl_40ft}
+                        mty40={vessel.loaded_empty_40ft}
+                    />
+                    <StatRowCard
+                        label="Balance"
+                        labelColor="text-yellow-400"
+                        valueColor="text-yellow-300"
+                        fcl20={bal(vessel.load_plan_fcl_20ft, vessel.loaded_fcl_20ft)}
+                        mty20={bal(vessel.load_plan_empty_20ft, vessel.loaded_empty_20ft)}
+                        fcl40={bal(vessel.load_plan_fcl_40ft, vessel.loaded_fcl_40ft)}
+                        mty40={bal(vessel.load_plan_empty_40ft, vessel.loaded_empty_40ft)}
+                    />
+                </div>
+                <div className="mt-1.5 px-1">
+                    <TotalsRow
+                        plannedLabel="Total Planned"
+                        plannedValue={vessel.total_planned_loading_wi}
+                        doneLabel="Total Loaded"
+                        doneValue={vessel.total_loaded_count}
+                        balanceValue={bal(vessel.total_planned_loading_wi, vessel.total_loaded_count)}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
@@ -178,6 +330,7 @@ interface VesselCardProps {
 export default function VesselCard({ vessel }: VesselCardProps) {
     const fmt = (dt: string | null) => (dt ? new Date(dt).toLocaleString() : null);
     const elapsed = useElapsed(vessel?.actual_time_of_arrival ?? null);
+    const isNarrowViewport = useNarrowViewport();
 
     if (!vessel) return null;
 
@@ -234,14 +387,35 @@ export default function VesselCard({ vessel }: VesselCardProps) {
                 </div>
             </div>
 
-            {/* Stat table + chart - stacked (scrollable) on phones/tablets, side-by-side (fixed, no scroll) from lg: up */}
+            {/* Stat table/cards + chart - stacked (scrollable) on phones/tablets, side-by-side (fixed, no scroll) from lg: up */}
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto lg:flex-row lg:overflow-hidden">
-                <div className="flex w-full flex-col lg:min-h-0 lg:w-1/2">
-                    <StatTable vessel={vessel} />
+                {/* Left - StatTable (dense, desktop/TV) at lg: and up, StatCards (stacked, mobile-friendly) below lg: */}
+                <div className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden lg:w-1/2 lg:shrink">
+                    <div className="hidden h-full lg:block">
+                        <StatTable vessel={vessel} />
+                    </div>
+                    <div className="lg:hidden">
+                        <StatCards vessel={vessel} />
+                    </div>
                 </div>
-                <div className="flex h-64 w-full items-center justify-center sm:h-80 lg:h-auto lg:min-h-0 lg:w-1/2">
-                    <div className="h-full w-full lg:h-3/4">
-                        <VesselBarChart graphData={vessel.graph} vesselName={vessel.vessel_name} />
+                {/* Right - chart, full width on mobile, 50%/75%-height centered on desktop/TV */}
+                <div className="flex min-h-0 w-full shrink-0 flex-col items-center justify-center lg:w-1/2 lg:shrink">
+                    {isNarrowViewport && (
+                        <p className="mb-1 flex shrink-0 items-center justify-center gap-1 text-[10px] text-slate-500">
+                            <ArrowLeftRight className="h-3 w-3" />
+                            Swipe sideways to see the full chart
+                        </p>
+                    )}
+                    <div className={`h-64 w-full sm:h-80 lg:h-3/4 ${isNarrowViewport ? 'overflow-x-auto' : ''}`}>
+                        {/* Below lg, force a per-bar minimum width so the chart
+                            renders at its normal (TV-scale) size instead of
+                            squishing - the container scrolls horizontally instead. */}
+                        <div
+                            className="h-full"
+                            style={isNarrowViewport ? { minWidth: Math.max((vessel.graph?.length ?? 0) * 44, 560) } : undefined}
+                        >
+                            <VesselBarChart graphData={vessel.graph} vesselName={vessel.vessel_name} />
+                        </div>
                     </div>
                 </div>
             </div>

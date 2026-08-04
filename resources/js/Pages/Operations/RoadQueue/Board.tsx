@@ -70,6 +70,17 @@ function isElapsedTimeGreaterOrEqualOneHour(elapsedTimeStr: string | null) {
     return days > 0 || hours >= 1;
 }
 
+function isElapsedTimeGreaterOrEqualThirtyMinutes(elapsedTimeStr: string | null) {
+    if (!elapsedTimeStr) return false;
+    const dayMatch = elapsedTimeStr.match(/(\d+)D/);
+    const hourMatch = elapsedTimeStr.match(/(\d+)H/);
+    const minuteMatch = elapsedTimeStr.match(/(\d+)M/);
+    const days = dayMatch ? parseInt(dayMatch[1]) : 0;
+    const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const minutes = minuteMatch ? parseInt(minuteMatch[1]) : 0;
+    return days > 0 || hours >= 1 || minutes >= 30;
+}
+
 function formatDateTime(value: string | null) {
     if (!value) return '-';
     try {
@@ -332,11 +343,18 @@ export default function RoadQueueBoard({
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {sortedData.map((item, idx) => (
+                                        {sortedData.map((item, idx) => {
+                                            const rowOverdue = isElapsedTimeGreaterOrEqualOneHour(item.elapsed_time);
+                                            const rowWarning = !rowOverdue && isElapsedTimeGreaterOrEqualThirtyMinutes(item.ingate_elapsed_time);
+                                            return (
                                             <tr
                                                 key={idx}
                                                 className={`transition duration-150 ${
-                                                    isElapsedTimeGreaterOrEqualOneHour(item.elapsed_time) ? 'bg-red-200 hover:bg-red-300' : 'hover:bg-blue-50'
+                                                    rowOverdue
+                                                        ? 'bg-red-200 hover:bg-red-300'
+                                                        : rowWarning
+                                                          ? 'bg-yellow-200 hover:bg-yellow-300'
+                                                          : 'hover:bg-blue-50'
                                                 }`}
                                             >
                                                 <td className="w-8 bg-gray-50 px-1 py-1 text-xs font-bold text-gray-700 sm:text-base lg:text-xl">
@@ -363,7 +381,8 @@ export default function RoadQueueBoard({
                                                     </td>
                                                 ))}
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -380,6 +399,10 @@ export default function RoadQueueBoard({
                                         primaryFields={PRIMARY_FIELDS}
                                         secondaryFields={SECONDARY_FIELDS}
                                         highlighted={isElapsedTimeGreaterOrEqualOneHour(item.elapsed_time)}
+                                        warning={
+                                            !isElapsedTimeGreaterOrEqualOneHour(item.elapsed_time) &&
+                                            isElapsedTimeGreaterOrEqualThirtyMinutes(item.ingate_elapsed_time)
+                                        }
                                         expanded={expandedKeys.has(key)}
                                         onToggleExpanded={() => toggleExpanded(key)}
                                     />

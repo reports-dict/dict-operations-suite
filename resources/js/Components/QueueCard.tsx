@@ -15,6 +15,7 @@ interface QueueCardProps<T> {
     primaryFields: QueueCardField<T>[];
     secondaryFields: QueueCardField<T>[];
     highlighted: boolean;
+    warning?: boolean;
     expanded: boolean;
     onToggleExpanded: () => void;
 }
@@ -39,16 +40,18 @@ export default function QueueCard<T extends object>({
     primaryFields,
     secondaryFields,
     highlighted,
+    warning,
     expanded,
     onToggleExpanded,
 }: QueueCardProps<T>) {
-    const tone = highlighted ? 'border-red-300 bg-red-200' : 'border-slate-200 bg-white';
+    const tone = highlighted ? 'border-red-300 bg-red-200' : warning ? 'border-yellow-300 bg-yellow-200' : 'border-slate-200 bg-white';
 
     return (
         <div className={`rounded-lg border p-3 shadow-sm transition ${tone}`}>
             <div className="mb-2 flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-slate-400">#{index + 1}</span>
                 {highlighted && <Badge tone="red">Overdue</Badge>}
+                {!highlighted && warning && <Badge tone="amber">Warning</Badge>}
             </div>
 
             <div className="flex flex-col gap-1.5">

@@ -77,7 +77,7 @@ export default function AppLayout({ children, fullBleed = false }: PropsWithChil
 
             <aside
                 className={cn(
-                    'fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-white/10 bg-green-900 transition-all duration-200 ease-in-out lg:static lg:z-auto lg:translate-x-0',
+                    'fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-white/10 bg-green-900 transition-all duration-200 ease-in-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:translate-x-0',
                     collapsed ? 'lg:w-16' : 'lg:w-56',
                     sidebarOpen ? 'translate-x-0' : '-translate-x-full',
                 )}

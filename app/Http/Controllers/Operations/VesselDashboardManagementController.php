@@ -51,7 +51,7 @@ class VesselDashboardManagementController extends Controller
                 'success_this_week' => $successThisWeek,
                 'failed_this_week' => $failedThisWeek,
             ],
-            'logs' => VesselSyncLog::orderByDesc('ran_at')->paginate(20),
+            'logs' => VesselSyncLog::orderByDesc('ran_at')->paginate(10),
         ]);
     }
 
