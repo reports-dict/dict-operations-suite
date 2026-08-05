@@ -332,17 +332,29 @@ ECINData AS (
       AND fcy_visit.time_rnd >= @StartHour
     GROUP BY unit.declrd_ib_cv, DATEADD(HOUR, DATEDIFF(HOUR, 0, fcy_visit.time_rnd), 0)
 ),
-CombinedData AS (SELECT * FROM MoveData UNION ALL SELECT * FROM ECINData)
-SELECT
-    sp.ob_ib_id,
-    DATEPART(HOUR, sp.hour_bucket) AS move_hour,
-    sp.hour_bucket,
-    cd.crane,
-    ISNULL(cd.total, 0) AS total
-FROM Spine sp
-LEFT JOIN CombinedData cd
-    ON sp.hour_bucket = cd.hour_bucket AND sp.ob_ib_id = cd.ob_ib_id
-ORDER BY sp.ob_ib_id, sp.hour_bucket
+CombinedData AS (SELECT * FROM MoveData UNION ALL SELECT * FROM ECINData),
+FinalData AS (
+    SELECT
+        sp.ob_ib_id,
+        DATEPART(HOUR, sp.hour_bucket) AS move_hour,
+        sp.hour_bucket,
+        cd.crane,
+        ISNULL(cd.total, 0) AS total
+    FROM Spine sp
+    LEFT JOIN CombinedData cd
+        ON sp.hour_bucket = cd.hour_bucket AND sp.ob_ib_id = cd.ob_ib_id
+),
+FirstActive AS (
+    SELECT ob_ib_id, MIN(hour_bucket) AS first_hour
+    FROM FinalData
+    WHERE total > 0
+    GROUP BY ob_ib_id
+)
+SELECT fd.ob_ib_id, fd.move_hour, fd.hour_bucket, fd.crane, fd.total
+FROM FinalData fd
+LEFT JOIN FirstActive fa ON fd.ob_ib_id = fa.ob_ib_id
+WHERE fd.hour_bucket >= ISNULL(fa.first_hour, @StartHour)
+ORDER BY fd.ob_ib_id, fd.hour_bucket
 OPTION (MAXRECURSION 24)
 SQL;
     }

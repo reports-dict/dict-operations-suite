@@ -51,7 +51,8 @@ RUN docker-php-ext-configure ldap \
     bcmath \
     zip \
     opcache \
-    intl
+    intl \
+    gd
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

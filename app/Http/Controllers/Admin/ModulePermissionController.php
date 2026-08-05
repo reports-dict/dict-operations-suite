@@ -7,6 +7,7 @@ use App\Models\Module;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -85,24 +86,35 @@ class ModulePermissionController extends Controller
         return back();
     }
 
-    public function grantUserOverride(Request $request): RedirectResponse
+    public function syncUserOverrides(Request $request, User $user): RedirectResponse
     {
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'module_id' => 'required|exists:modules,id',
-        ]);
-
-        $user = User::findOrFail($validated['user_id']);
-
         if ($user->hasRole('superadmin')) {
             throw ValidationException::withMessages([
-                'user_id' => 'Superadmin already has access to every module.',
+                'module_ids' => 'Superadmin already has access to every module.',
             ]);
         }
 
-        $module = Module::findOrFail($validated['module_id']);
+        $validated = $request->validate([
+            'module_ids' => 'present|array',
+            'module_ids.*' => 'integer|exists:modules,id',
+        ]);
 
-        $user->givePermissionTo($module->permissionName());
+        $modules = Module::query()->orderBy('name')->get();
+        $moduleNames = $modules->map->permissionName();
+        $targetNames = $modules->whereIn('id', $validated['module_ids'])->map->permissionName();
+
+        $currentNames = $user->permissions()->pluck('name')->intersect($moduleNames);
+        $toGrant = $targetNames->diff($currentNames)->values()->all();
+        $toRevoke = $currentNames->diff($targetNames)->values()->all();
+
+        DB::transaction(function () use ($user, $toGrant, $toRevoke) {
+            if ($toGrant) {
+                $user->givePermissionTo($toGrant);
+            }
+            if ($toRevoke) {
+                $user->revokePermissionTo($toRevoke);
+            }
+        });
 
         return back();
     }

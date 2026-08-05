@@ -1,4 +1,5 @@
 import PageHeader from '@/Components/PageHeader';
+import CsvExportButton from '@/Components/History/CsvExportButton';
 import Badge from '@/Components/ui/Badge';
 import Button from '@/Components/ui/Button';
 import Card from '@/Components/ui/Card';
@@ -10,6 +11,15 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Head, router } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Copy } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import { formatHoursMinutes } from './formatters';
+
+function buildExportUrl(base: string, params: Record<string, string | null>) {
+    const qs = Object.entries(params)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+        .join('&');
+    return qs ? `${base}?${qs}` : base;
+}
 
 interface ReeferRow {
     container: string;
@@ -38,11 +48,17 @@ interface Filters {
     category: 'both' | 'imprt' | 'exprt';
 }
 
+interface Summary {
+    total_hours: number;
+    average_hours: number;
+}
+
 interface Props {
     rows: Paginated<ReeferRow>;
     filters: Filters;
     sort: string;
     direction: 'asc' | 'desc';
+    summary: Summary;
 }
 
 const COLUMNS: { key: string; label: string; align?: 'right' }[] = [
@@ -55,7 +71,7 @@ const COLUMNS: { key: string; label: string; align?: 'right' }[] = [
     { key: 'type_iso', label: 'ISO Type' },
 ];
 
-export default function ReeferPluginReportIndex({ rows, filters, sort, direction }: Props) {
+export default function ReeferPluginReportIndex({ rows, filters, sort, direction, summary }: Props) {
     const [localFrom, setLocalFrom] = useState(filters.date_from ?? '');
     const [localTo, setLocalTo] = useState(filters.date_to ?? '');
     const [localCategory, setLocalCategory] = useState(filters.category);
@@ -64,9 +80,17 @@ export default function ReeferPluginReportIndex({ rows, filters, sort, direction
         router.get(
             '/operations/reefer-plugin-report/per-container',
             { ...filters, sort, direction, ...overrides, page: overrides.page ?? 1 },
-            { preserveState: true, preserveScroll: true, only: ['rows', 'filters', 'sort', 'direction'] },
+            { preserveState: true, preserveScroll: true, only: ['rows', 'filters', 'sort', 'direction', 'summary'] },
         );
     };
+
+    const exportUrl = buildExportUrl('/operations/reefer-plugin-report/per-container/export', {
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        category: filters.category,
+        sort,
+        direction,
+    });
 
     const toggleSort = (column: string) => {
         applyQuery({ sort: column, direction: sort === column && direction === 'asc' ? 'desc' : 'asc' });
@@ -84,6 +108,7 @@ export default function ReeferPluginReportIndex({ rows, filters, sort, direction
             <PageHeader
                 title="Reefer Plug-in Hours Report"
                 description="Hours reefer containers have been plugged in at the terminal over a selected date range."
+                actions={<CsvExportButton url={exportUrl} filename="reefer_plugin_per_container.xlsx" />}
             />
 
             <Card className="mb-4 p-3">
@@ -121,6 +146,23 @@ export default function ReeferPluginReportIndex({ rows, filters, sort, direction
                     </Button>
                 </form>
             </Card>
+
+            {filters.date_from && (
+                <div className="mb-4 grid grid-cols-2 gap-3">
+                    <Card className="p-3">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Total Hours</p>
+                        <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
+                            {formatHoursMinutes(summary.total_hours)}
+                        </p>
+                    </Card>
+                    <Card className="p-3">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Average Total Hours</p>
+                        <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
+                            {formatHoursMinutes(summary.average_hours)}
+                        </p>
+                    </Card>
+                </div>
+            )}
 
             <div className="mb-3 flex items-end gap-2 sm:hidden">
                 <div className="flex-1">

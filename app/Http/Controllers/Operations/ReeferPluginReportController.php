@@ -7,12 +7,87 @@ use App\Services\Operations\ReeferPluginPerContainerService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
-use Inertia\Response;
+use Inertia\Response as InertiaResponse;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReeferPluginReportController extends Controller
 {
-    public function __invoke(Request $request, ReeferPluginPerContainerService $service): Response
+    public function index(Request $request, ReeferPluginPerContainerService $service): InertiaResponse
+    {
+        [$filters, $sort, $direction, $rows] = $this->fetchRows($request, $service);
+
+        $totalHours = round($rows->sum('total_plugin_hours'), 2);
+        $averageHours = $rows->isNotEmpty() ? round($totalHours / $rows->count(), 2) : 0.0;
+
+        $page = $request->integer('page', 1);
+        $perPage = 10;
+        $paginated = new LengthAwarePaginator(
+            $rows->forPage($page, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+
+        return Inertia::render('Operations/ReeferPluginReport/Index', [
+            'rows' => $paginated,
+            'filters' => $filters,
+            'sort' => $sort,
+            'direction' => $direction,
+            'summary' => ['total_hours' => $totalHours, 'average_hours' => $averageHours],
+        ]);
+    }
+
+    public function export(Request $request, ReeferPluginPerContainerService $service): StreamedResponse
+    {
+        [, , , $rows] = $this->fetchRows($request, $service);
+
+        $totalHours = round($rows->sum('total_plugin_hours'), 2);
+        $averageHours = $rows->isNotEmpty() ? round($totalHours / $rows->count(), 2) : 0.0;
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray(
+            ['Container', 'Category', 'Transit State', 'Plug-in Hours', 'Connect/Disconnect', 'Line Operator', 'ISO Type', 'Visit'],
+            null,
+            'A1',
+        );
+
+        $r = 2;
+        foreach ($rows as $row) {
+            $sheet->fromArray([
+                $row['container'],
+                $row['category'],
+                $row['transit_state'],
+                $row['total_plugin_hours'],
+                $row['total_connect_disconnect'],
+                $row['line_op'],
+                $row['type_iso'],
+                "{$row['visit_index']}/{$row['total_visits']}",
+            ], null, "A{$r}");
+            $r++;
+        }
+
+        $r++;
+        $sheet->fromArray(['Total Hours', $totalHours], null, "A{$r}");
+        $r++;
+        $sheet->fromArray(['Average Total Hours', $averageHours], null, "A{$r}");
+
+        return $this->streamXlsx($spreadsheet, 'reefer_plugin_per_container.xlsx');
+    }
+
+    /**
+     * Shared by index()/export() - filter parsing, fetch, sort, and
+     * visit_index/total_visits tagging, before either pagination (index) or
+     * a full unpaginated export.
+     *
+     * @return array{0: array, 1: string, 2: string, 3: Collection}
+     */
+    private function fetchRows(Request $request, ReeferPluginPerContainerService $service): array
     {
         $filters = [
             'date_from' => $request->string('date_from')->toString() ?: null,
@@ -48,21 +123,15 @@ class ReeferPluginReportController extends Controller
             ];
         });
 
-        $page = $request->integer('page', 1);
-        $perPage = 10;
-        $paginated = new LengthAwarePaginator(
-            $rows->forPage($page, $perPage)->values(),
-            $rows->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()],
-        );
+        return [$filters, $sort, $direction, $rows];
+    }
 
-        return Inertia::render('Operations/ReeferPluginReport/Index', [
-            'rows' => $paginated,
-            'filters' => $filters,
-            'sort' => $sort,
-            'direction' => $direction,
+    private function streamXlsx(Spreadsheet $spreadsheet, string $filename): StreamedResponse
+    {
+        $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+
+        return Response::streamDownload(fn () => $writer->save('php://output'), $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 }

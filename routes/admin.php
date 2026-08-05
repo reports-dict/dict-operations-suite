@@ -13,6 +13,6 @@ Route::prefix('admin')->middleware(['web', 'auth', 'allowed', 'superadmin'])->gr
 
     Route::get('permissions', [ModulePermissionController::class, 'index'])->name('admin.permissions.index');
     Route::patch('permissions/roles/{role}', [ModulePermissionController::class, 'updateRoleGrant'])->name('admin.permissions.roles.update');
-    Route::post('permissions/users', [ModulePermissionController::class, 'grantUserOverride'])->name('admin.permissions.users.grant');
+    Route::patch('permissions/users/{user}/overrides', [ModulePermissionController::class, 'syncUserOverrides'])->name('admin.permissions.users.sync');
     Route::delete('permissions/users/{user}', [ModulePermissionController::class, 'revokeUserOverride'])->name('admin.permissions.users.revoke');
 });

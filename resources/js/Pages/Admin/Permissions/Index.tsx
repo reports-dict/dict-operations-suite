@@ -2,11 +2,12 @@ import PageHeader from '@/Components/PageHeader';
 import Button from '@/Components/ui/Button';
 import Card from '@/Components/ui/Card';
 import Checkbox from '@/Components/ui/Checkbox';
+import Combobox from '@/Components/ui/Combobox';
+import Input from '@/Components/ui/Input';
 import Label from '@/Components/ui/Label';
-import Select from '@/Components/ui/Select';
 import AppLayout from '@/Layouts/AppLayout';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type RoleName = 'admin' | 'bdd';
 
@@ -46,13 +47,55 @@ interface Props {
 }
 
 export default function ModulePermissionsIndex({ modules, roles, roleGrants, userOverrides, users }: Props) {
-    const grantForm = useForm({ user_id: '', module_id: '' });
+    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+    const [saved, setSaved] = useState(false);
+    const [overrideSearch, setOverrideSearch] = useState('');
 
-    const submitGrant: FormEventHandler = (e) => {
-        e.preventDefault();
-        grantForm.post('/admin/permissions/users', {
+    const filteredOverrides = useMemo(() => {
+        const needle = overrideSearch.trim().toLowerCase();
+        if (!needle) {
+            return userOverrides;
+        }
+
+        return userOverrides.filter(
+            (row) =>
+                row.name.toLowerCase().includes(needle) ||
+                row.username.toLowerCase().includes(needle) ||
+                row.module_name.toLowerCase().includes(needle),
+        );
+    }, [userOverrides, overrideSearch]);
+
+    const overridesForSelectedUser = useMemo(
+        () => userOverrides.filter((o) => o.user_id === selectedUserId).map((o) => o.module_id),
+        [userOverrides, selectedUserId],
+    );
+
+    const syncForm = useForm<{ module_ids: number[] }>({ module_ids: overridesForSelectedUser });
+
+    useEffect(() => {
+        syncForm.setData('module_ids', overridesForSelectedUser);
+        setSaved(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedUserId, overridesForSelectedUser]);
+
+    const selectedUser = users.find((u) => u.id === selectedUserId) ?? null;
+
+    const toggleModuleForSelectedUser = (module: ModuleRow, checked: boolean) => {
+        setSaved(false);
+        syncForm.setData(
+            'module_ids',
+            checked ? [...syncForm.data.module_ids, module.id] : syncForm.data.module_ids.filter((id) => id !== module.id),
+        );
+    };
+
+    const saveUserOverrides = () => {
+        if (!selectedUserId) {
+            return;
+        }
+
+        syncForm.patch(`/admin/permissions/users/${selectedUserId}/overrides`, {
             preserveScroll: true,
-            onSuccess: () => grantForm.reset(),
+            onSuccess: () => setSaved(true),
         });
     };
 
@@ -158,61 +201,73 @@ export default function ModulePermissionsIndex({ modules, roles, roleGrants, use
             </Card>
 
             <Card className="mb-4 p-3">
-                <form onSubmit={submitGrant} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <div className="w-full sm:w-56">
-                        <Label htmlFor="override_user">User</Label>
-                        <Select
-                            id="override_user"
-                            value={grantForm.data.user_id}
-                            onChange={(e) => grantForm.setData('user_id', e.target.value)}
-                        >
-                            <option value="" disabled>
-                                Select user…
-                            </option>
-                            {users.map((user) => (
-                                <option key={user.id} value={user.id}>
-                                    {user.username}
-                                </option>
-                            ))}
-                        </Select>
-                        {grantForm.errors.user_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{grantForm.errors.user_id}</p>}
-                    </div>
+                <p className="mb-3 text-sm font-medium text-slate-900 dark:text-white">Assign Modules</p>
 
-                    <div className="w-full sm:w-56">
-                        <Label htmlFor="override_module">Module</Label>
-                        <Select
-                            id="override_module"
-                            value={grantForm.data.module_id}
-                            onChange={(e) => grantForm.setData('module_id', e.target.value)}
-                        >
-                            <option value="" disabled>
-                                Select module…
-                            </option>
+                <div className="mb-3 w-full sm:w-72">
+                    <Label htmlFor="override_user">User</Label>
+                    <Combobox
+                        id="override_user"
+                        placeholder="Search user…"
+                        options={users.map((user) => ({ id: user.id, label: user.name, sublabel: user.username }))}
+                        value={selectedUserId}
+                        onChange={(id) => setSelectedUserId(id)}
+                    />
+                </div>
+
+                {selectedUser ? (
+                    <>
+                        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                             {modules.map((module) => (
-                                <option key={module.id} value={module.id}>
+                                <label
+                                    key={module.id}
+                                    className="flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-300"
+                                >
+                                    <Checkbox
+                                        checked={syncForm.data.module_ids.includes(module.id)}
+                                        onChange={(e) => toggleModuleForSelectedUser(module, e.target.checked)}
+                                    />
                                     {module.name}
-                                </option>
+                                </label>
                             ))}
-                        </Select>
-                        {grantForm.errors.module_id && (
-                            <p className="mt-1 text-xs text-red-600 dark:text-red-400">{grantForm.errors.module_id}</p>
-                        )}
-                    </div>
+                        </div>
 
-                    <Button type="submit" variant="primary" disabled={grantForm.processing} className="w-full sm:w-auto">
-                        Grant Access
-                    </Button>
-                </form>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                type="button"
+                                variant="primary"
+                                disabled={syncForm.processing}
+                                onClick={saveUserOverrides}
+                                className="w-full sm:w-auto"
+                            >
+                                Save Changes
+                            </Button>
+                            {saved && !syncForm.processing && <span className="text-xs text-green-600 dark:text-green-400">Saved</span>}
+                        </div>
+                    </>
+                ) : (
+                    <p className="text-sm text-slate-400 dark:text-slate-600">Search for a user above to assign their module overrides.</p>
+                )}
             </Card>
 
+            <div className="mb-3 w-full sm:w-72">
+                <Label htmlFor="override_search">Search overrides</Label>
+                <Input
+                    id="override_search"
+                    type="text"
+                    placeholder="Filter by user or module…"
+                    value={overrideSearch}
+                    onChange={(e) => setOverrideSearch(e.target.value)}
+                />
+            </div>
+
             <div className="space-y-3 sm:hidden">
-                {userOverrides.map((row) => (
+                {filteredOverrides.map((row) => (
                     <Card key={`${row.user_id}-${row.module_id}`} className="p-3">
                         <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                                <p className="truncate font-medium text-slate-900 dark:text-white">{row.name}</p>
+                            <button type="button" className="min-w-0 text-left" onClick={() => setSelectedUserId(row.user_id)}>
+                                <p className="truncate font-medium text-slate-900 hover:underline dark:text-white">{row.name}</p>
                                 <p className="truncate text-xs text-slate-500 dark:text-slate-400">{row.username}</p>
-                            </div>
+                            </button>
                             <Button variant="danger" onClick={() => revokeOverride(row)}>
                                 Revoke
                             </Button>
@@ -224,8 +279,10 @@ export default function ModulePermissionsIndex({ modules, roles, roleGrants, use
                     </Card>
                 ))}
 
-                {userOverrides.length === 0 && (
-                    <p className="py-10 text-center text-sm text-slate-400 dark:text-slate-600">No active user overrides.</p>
+                {filteredOverrides.length === 0 && (
+                    <p className="py-10 text-center text-sm text-slate-400 dark:text-slate-600">
+                        {userOverrides.length === 0 ? 'No active user overrides.' : 'No overrides match your search.'}
+                    </p>
                 )}
             </div>
 
@@ -246,11 +303,13 @@ export default function ModulePermissionsIndex({ modules, roles, roleGrants, use
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {userOverrides.map((row) => (
+                            {filteredOverrides.map((row) => (
                                 <tr key={`${row.user_id}-${row.module_id}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                     <td className="px-4 py-2.5 whitespace-nowrap">
-                                        <p className="font-medium text-slate-900 dark:text-white">{row.name}</p>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">{row.username}</p>
+                                        <button type="button" className="text-left" onClick={() => setSelectedUserId(row.user_id)}>
+                                            <p className="font-medium text-slate-900 hover:underline dark:text-white">{row.name}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">{row.username}</p>
+                                        </button>
                                     </td>
                                     <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 dark:text-slate-300">{row.module_name}</td>
                                     <td className="px-4 py-2.5 whitespace-nowrap">
@@ -261,10 +320,10 @@ export default function ModulePermissionsIndex({ modules, roles, roleGrants, use
                                 </tr>
                             ))}
 
-                            {userOverrides.length === 0 && (
+                            {filteredOverrides.length === 0 && (
                                 <tr>
                                     <td colSpan={3} className="px-4 py-10 text-center text-sm text-slate-400 dark:text-slate-600">
-                                        No active user overrides.
+                                        {userOverrides.length === 0 ? 'No active user overrides.' : 'No overrides match your search.'}
                                     </td>
                                 </tr>
                             )}

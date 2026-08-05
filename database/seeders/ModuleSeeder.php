@@ -21,6 +21,14 @@ class ModuleSeeder extends Seeder
             ['slug' => 'road-queue-ecd', 'name' => 'Road Queue (ECD)'],
             ['slug' => 'driver-assignment', 'name' => 'Driver Assignment'],
             ['slug' => 'vessel-dashboard', 'name' => 'Vessel Dashboard'],
+
+            // Sub-permissions for actions more consequential than plain viewing -
+            // not real modules (no Service class, no board, no MODULE_NAV entry),
+            // just extra grantable rows reusing the module/permission machinery.
+            // Granting the base module above no longer implies these.
+            ['slug' => 'vessel-dashboard-manage', 'name' => 'Vessel Dashboard — Manage (Overrides & Sync)'],
+            ['slug' => 'road-queue-export', 'name' => 'Road Queue — CSV Export'],
+            ['slug' => 'road-queue-ecd-export', 'name' => 'Road Queue (ECD) — CSV Export'],
         ];
 
         foreach ($modules as $data) {

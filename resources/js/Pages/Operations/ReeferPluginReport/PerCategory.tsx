@@ -1,4 +1,5 @@
 import PageHeader from '@/Components/PageHeader';
+import CsvExportButton from '@/Components/History/CsvExportButton';
 import Button from '@/Components/ui/Button';
 import Card from '@/Components/ui/Card';
 import Input from '@/Components/ui/Input';
@@ -8,6 +9,15 @@ import AppLayout from '@/Layouts/AppLayout';
 import { cn } from '@/lib/utils';
 import { Head, router } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
+import { formatHoursMinutes } from './formatters';
+
+function buildExportUrl(base: string, params: Record<string, string | null>) {
+    const qs = Object.entries(params)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+        .join('&');
+    return qs ? `${base}?${qs}` : base;
+}
 
 interface CategoryRow {
     category: 'IMPRT' | 'EXPRT';
@@ -43,14 +53,6 @@ function saturdayToFridayWeek(anchorIso: string) {
     return { date_from: toIso(start), date_to: toIso(end) };
 }
 
-function formatHoursMinutes(totalHours: number) {
-    const totalMinutes = Math.round(totalHours * 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    return `${hours.toLocaleString()} hrs ${minutes} min`;
-}
-
 export default function ReeferPluginPerCategory({ rows, filters }: Props) {
     const [mode, setMode] = useState<'manual' | 'week' | 'date'>('manual');
     const [manualFrom, setManualFrom] = useState(filters.date_from ?? '');
@@ -59,6 +61,13 @@ export default function ReeferPluginPerCategory({ rows, filters }: Props) {
     const [singleDate, setSingleDate] = useState('');
     const [localCategory, setLocalCategory] = useState(filters.category);
     const totalHours = rows.reduce((sum, row) => sum + row.total_plugin_hours, 0);
+    const totalContainers = rows.reduce((sum, row) => sum + row.total_containers, 0);
+    const averageHours = totalContainers > 0 ? totalHours / totalContainers : 0;
+    const exportUrl = buildExportUrl('/operations/reefer-plugin-report/per-category/export', {
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        category: filters.category,
+    });
 
     const applyQuery = (overrides: Record<string, string | null>) => {
         router.get(
@@ -93,6 +102,7 @@ export default function ReeferPluginPerCategory({ rows, filters }: Props) {
             <PageHeader
                 title="Reefer Plug-in Hours - Per Category"
                 description="Totals aggregated by container category over a selected date range."
+                actions={<CsvExportButton url={exportUrl} filename="reefer_plugin_per_category.xlsx" />}
             />
 
             <Card className="mb-4 p-3">
@@ -241,6 +251,14 @@ export default function ReeferPluginPerCategory({ rows, filters }: Props) {
                                     </td>
                                     <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-900 dark:text-white">
                                         {formatHoursMinutes(totalHours)}
+                                    </td>
+                                </tr>
+                                <tr className="font-semibold">
+                                    <td colSpan={3} className="px-4 py-2.5 text-right text-sm text-slate-700 dark:text-slate-300">
+                                        Average Total Hours
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-900 dark:text-white">
+                                        {formatHoursMinutes(averageHours)}
                                     </td>
                                 </tr>
                             </tfoot>
