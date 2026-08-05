@@ -311,12 +311,13 @@ MoveData AS (
     INNER JOIN [sparcsn4].[dbo].inv_move_event AS mv_event ON argo_cv.gkey = mv_event.carrier_gkey
     LEFT  JOIN [sparcsn4].[dbo].xps_che ON mv_event.che_qc = xps_che.gkey
     WHERE argo_cv.gkey IN ({$inPlaceholders})
-      AND mv_event.move_kind IN ('SHOB','SHFT','LOAD','DSCH')
+      AND mv_event.move_kind IN ('SHOB','LOAD','DSCH')
       AND (CASE mv_event.move_kind WHEN 'DSCH' THEN mv_event.t_discharge ELSE mv_event.t_put END) >= @StartHour
     GROUP BY argo_cv.gkey,
         DATEADD(HOUR, DATEDIFF(HOUR, 0,
             CASE mv_event.move_kind WHEN 'DSCH' THEN mv_event.t_discharge ELSE mv_event.t_put END), 0),
         COALESCE(xps_che.full_name, 'UNKR')
+    HAVING COALESCE(xps_che.full_name, 'UNKR') <> 'UNKR'
 ),
 ECINData AS (
     SELECT
