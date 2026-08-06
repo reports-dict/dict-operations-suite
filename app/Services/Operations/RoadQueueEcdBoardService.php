@@ -77,7 +77,8 @@ class RoadQueueEcdBoardService
                     END,
                     (t.total_seconds % 86400) / 3600, 'H ',
                     (t.total_seconds % 3600) / 60, 'M'
-                ) AS elapsed_time
+                ) AS elapsed_time,
+            ref_biz.name AS shipper
 
             FROM [sparcsn4].[dbo].[inv_wi] AS wi
 
@@ -129,6 +130,9 @@ class RoadQueueEcdBoardService
 
             LEFT JOIN [sparcsn4].[dbo].[inv_goods] as goods
                 ON unit.goods = goods.gkey
+
+            LEFT JOIN [sparcsn4].[dbo].[ref_bizunit_scoped] as ref_biz
+                ON goods.shipper_bzu=ref_biz.gkey
 
             LEFT JOIN [sparcsn4].[dbo].[ref_commodity] as cmdy
                 ON goods.commodity_gkey = cmdy.gkey

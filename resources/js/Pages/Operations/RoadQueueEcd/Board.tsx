@@ -14,6 +14,7 @@ interface RoadQueueEcdRow {
     line_op: string | null;
     booking_number: string | null;
     trucking_company: string | null;
+    shipper: string | null;
     // Selected by RoadQueueEcdBoardService but not previously declared here -
     // used as the stable card-expand key (see getRowKey below).
     bat_nbr: string | null;
@@ -37,6 +38,7 @@ const COLUMNS: { key: keyof RoadQueueEcdRow; label: string }[] = [
     { key: 'line_op', label: 'Line Operator' },
     { key: 'booking_number', label: 'Booking Number' },
     { key: 'trucking_company', label: 'Trucking Company' },
+    { key: 'shipper', label: 'Shipper' },
 ];
 
 function getCategoryColor(value: string | null) {
