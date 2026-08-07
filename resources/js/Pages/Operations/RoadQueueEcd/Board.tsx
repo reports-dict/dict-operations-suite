@@ -38,7 +38,6 @@ const COLUMNS: { key: keyof RoadQueueEcdRow; label: string }[] = [
     { key: 'line_op', label: 'Line Operator' },
     { key: 'booking_number', label: 'Booking Number' },
     { key: 'trucking_company', label: 'Trucking Company' },
-    { key: 'shipper', label: 'Shipper' },
 ];
 
 function getCategoryColor(value: string | null) {
