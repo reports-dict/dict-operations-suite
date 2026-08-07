@@ -67,6 +67,15 @@ RUN composer install --no-scripts --no-autoloader --ignore-platform-reqs
 # Copy application files
 COPY . .
 
+# Recreate the runtime-writable storage dirs .dockerignore deliberately
+# excludes (cache/data, sessions, views) - Laravel needs them to exist even
+# empty (e.g. Blade's compiled-view cache path) or it errors at request time.
+RUN mkdir -p storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/framework/testing \
+    storage/logs
+
 # Finalise Composer autoloader
 RUN composer dump-autoload --optimize --ignore-platform-reqs
 
@@ -105,6 +114,17 @@ RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
 COPY --from=frontend-build /app/public/build ./public/build
 RUN chown -R www-data:www-data /var/www/public/build
+
+# Stage a pristine copy of the built public/ dir outside the path
+# docker-compose.prod.yml's app_public named volume mounts over at runtime.
+# Docker only auto-populates a named volume from the image the *first* time
+# the volume is created - every later rebuild/--force-recreate leaves
+# whatever was already in the volume untouched, which silently froze
+# deployed public/ (Vite build output, index.php, etc.) at whatever it
+# looked like on day one. entrypoint.prod.sh rsyncs this staged copy back
+# over the live volume-backed public/ on every container start so a rebuilt
+# image's assets actually reach nginx.
+RUN cp -a /var/www/public /var/www/public-src
 
 COPY docker/entrypoint.prod.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
