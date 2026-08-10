@@ -17,6 +17,34 @@ function buildExportUrl(base: string, params: Record<string, string | null>) {
     return qs ? `${base}?${qs}` : base;
 }
 
+/**
+ * `navigator.clipboard` only exists in secure contexts (HTTPS, or literally
+ * `localhost`) - this app is served over plain HTTP, so on a deployment
+ * reached via server IP/hostname the Clipboard API is undefined. Fall back
+ * to the legacy execCommand approach, which still works over insecure HTTP.
+ */
+function copyToClipboard(text: string) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const succeeded = document.execCommand('copy');
+    document.body.removeChild(textarea);
+
+    if (!succeeded) {
+        return Promise.reject(new Error('execCommand copy failed'));
+    }
+
+    return Promise.resolve();
+}
+
 interface ConsigneeRow {
     customer_id: string;
     customer_name: string;
@@ -53,7 +81,7 @@ export default function ConsigneesIndex({ rows }: Props) {
 
     const copyRow = async (row: ConsigneeRow) => {
         try {
-            await navigator.clipboard.writeText(`${row.customer_id} - ${row.customer_name}`);
+            await copyToClipboard(`${row.customer_id} - ${row.customer_name}`);
             setCopiedId(row.customer_id);
             setTimeout(() => setCopiedId((id) => (id === row.customer_id ? null : id)), 1500);
         } catch {
