@@ -21,6 +21,7 @@ class ModuleSeeder extends Seeder
             ['slug' => 'road-queue-ecd', 'name' => 'Road Queue (ECD)'],
             ['slug' => 'driver-assignment', 'name' => 'Driver Assignment'],
             ['slug' => 'vessel-dashboard', 'name' => 'Vessel Dashboard'],
+            ['slug' => 'consignees', 'name' => 'Consignees'],
 
             // Sub-permissions for actions more consequential than plain viewing -
             // not real modules (no Service class, no board, no MODULE_NAV entry),

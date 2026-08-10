@@ -11,6 +11,7 @@ import { useState } from 'react';
 
 interface Filters {
     tat_shift: string | null;
+    tat_status: string | null;
     tat_from: string | null;
     tat_to: string | null;
     tx_container: string | null;
@@ -32,6 +33,16 @@ const TAT_FIELDS: FilterField[] = [
             { value: '', label: 'All Shifts' },
             { value: 'Day Shift', label: 'Day Shift' },
             { value: 'Night Shift', label: 'Night Shift' },
+        ],
+    },
+    {
+        type: 'select',
+        name: 'tat_status',
+        label: 'Type',
+        options: [
+            { value: '', label: 'All Types' },
+            { value: 'precheck_to_outgate', label: 'Precheck To Outgate' },
+            { value: 'ingate_to_outgate', label: 'Ingate To Outgate' },
         ],
     },
     { type: 'date', name: 'tat_from', label: 'From Date' },
@@ -68,6 +79,7 @@ function buildExportUrl(base: string, params: Record<string, string | null>) {
 export default function RoadQueueHistory({ tatHistory, transactions, filters }: Props) {
     const [tatValues, setTatValues] = useState({
         tat_shift: filters.tat_shift ?? '',
+        tat_status: filters.tat_status ?? '',
         tat_from: filters.tat_from ?? '',
         tat_to: filters.tat_to ?? '',
     });
@@ -81,7 +93,7 @@ export default function RoadQueueHistory({ tatHistory, transactions, filters }: 
     };
 
     const resetTat = () => {
-        const cleared = { tat_shift: '', tat_from: '', tat_to: '' };
+        const cleared = { tat_shift: '', tat_status: '', tat_from: '', tat_to: '' };
         setTatValues(cleared);
         router.get('/operations/road-queue/history', buildQuery(filters, cleared), { preserveState: true, preserveScroll: true });
     };
@@ -98,6 +110,7 @@ export default function RoadQueueHistory({ tatHistory, transactions, filters }: 
 
     const tatExportUrl = buildExportUrl('/operations/road-queue/history/export/tat', {
         tat_shift: filters.tat_shift,
+        tat_status: filters.tat_status,
         tat_from: filters.tat_from,
         tat_to: filters.tat_to,
     });
@@ -129,7 +142,7 @@ export default function RoadQueueHistory({ tatHistory, transactions, filters }: 
                             onChange={(name, value) => setTatValues((prev) => ({ ...prev, [name]: value }))}
                             onSubmit={applyTat}
                             onReset={resetTat}
-                            hasActiveFilters={!!(filters.tat_shift || filters.tat_from || filters.tat_to)}
+                            hasActiveFilters={!!(filters.tat_shift || filters.tat_status || filters.tat_from || filters.tat_to)}
                         />
                     </Card>
 
@@ -137,7 +150,7 @@ export default function RoadQueueHistory({ tatHistory, transactions, filters }: 
                         rows={tatHistory}
                         showStatus
                         emptyMessage={
-                            filters.tat_shift || filters.tat_from || filters.tat_to
+                            filters.tat_shift || filters.tat_status || filters.tat_from || filters.tat_to
                                 ? 'No records match the current filters.'
                                 : 'No TAT history recorded yet. Snapshots are captured automatically on each board load.'
                         }

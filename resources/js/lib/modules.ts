@@ -1,4 +1,4 @@
-import { LucideIcon, Ship, Snowflake, Truck, UserCog, Warehouse } from 'lucide-react';
+import { LucideIcon, Ship, Snowflake, Truck, UserCog, Users, Warehouse } from 'lucide-react';
 
 // Single source of truth for both the sidebar nav (AppLayout.tsx) and the
 // Modules landing page (Pages/Modules.tsx) - previously each hardcoded its
@@ -89,6 +89,15 @@ export const MODULE_NAV: ModuleNavEntry[] = [
             { href: '/operations/road-queue-ecd/board', label: 'Board' },
             { href: '/operations/road-queue-ecd/history', label: 'History' },
         ],
+    },
+    {
+        key: 'consignees',
+        navLabel: 'Consignees',
+        cardName: 'Consignees',
+        description: 'Consignee/customer reference list.',
+        icon: Users,
+        shape: 'flat',
+        href: '/operations/consignees',
     },
     {
         key: 'driver-assignment',

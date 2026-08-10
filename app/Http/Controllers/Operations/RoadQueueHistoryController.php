@@ -99,6 +99,7 @@ class RoadQueueHistoryController extends Controller
     {
         return [
             'tat_shift' => $request->string('tat_shift')->toString() ?: null,
+            'tat_status' => $request->string('tat_status')->toString() ?: null,
             'tat_from' => $request->string('tat_from')->toString() ?: null,
             'tat_to' => $request->string('tat_to')->toString() ?: null,
             'tx_container' => $request->string('tx_container')->toString() ?: null,
@@ -112,6 +113,7 @@ class RoadQueueHistoryController extends Controller
     {
         return RoadQueueTatHistory::query()
             ->when($filters['tat_shift'], fn ($q) => $q->where('shift_label', $filters['tat_shift']))
+            ->when($filters['tat_status'], fn ($q) => $q->where('status', $filters['tat_status']))
             ->when($filters['tat_from'], fn ($q) => $q->where('shift_start', '>=', Carbon::parse($filters['tat_from'])->startOfDay()))
             ->when($filters['tat_to'], fn ($q) => $q->where('shift_end', '<=', Carbon::parse($filters['tat_to'])->endOfDay()))
             ->orderByDesc('recorded_at');

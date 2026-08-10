@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Operations\ConsigneeController;
 use App\Http\Controllers\Operations\DriverAssignmentController;
 use App\Http\Controllers\Operations\ReeferPluginPerCategoryController;
 use App\Http\Controllers\Operations\ReeferPluginReportController;
@@ -84,5 +85,14 @@ Route::prefix('operations')->middleware(['web', 'auth', 'allowed'])->group(funct
             ->name('operations.vessel-dashboard.overrides.destroy');
         Route::post('sync-now', [VesselDashboardManagementController::class, 'syncNow'])
             ->name('operations.vessel-dashboard.sync-now');
+    });
+
+    // Read-only consignee/customer reference list (DICT_BS.dbo.DCSCustomer) -
+    // no history/snapshot tables, no public kiosk board.
+    Route::prefix('consignees')->middleware('can:operations.consignees.view')->group(function (): void {
+        Route::get('/', [ConsigneeController::class, 'index'])
+            ->name('operations.consignees.index');
+        Route::get('export', [ConsigneeController::class, 'export'])
+            ->name('operations.consignees.export');
     });
 });
