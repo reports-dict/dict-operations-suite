@@ -133,3 +133,47 @@ it('prevents a superadmin from modifying their own access, role, or account', fu
     $this->actingAs($superadmin)->patch("/admin/users/{$superadmin->id}/role", ['role' => 'bdd'])->assertForbidden();
     $this->actingAs($superadmin)->delete("/admin/users/{$superadmin->id}")->assertForbidden();
 });
+
+it("sets last_seen_at on a user's first authenticated request", function () {
+    $user = makeManagedUser();
+    expect($user->last_seen_at)->toBeNull();
+
+    $this->actingAs($user)->get('/modules')->assertSuccessful();
+
+    expect($user->fresh()->last_seen_at)->not->toBeNull();
+    expect($user->fresh()->last_seen_at->diffInSeconds(now()))->toBeLessThan(5);
+});
+
+it('does not re-touch last_seen_at within the throttle window', function () {
+    $user = makeManagedUser();
+    $this->actingAs($user)->get('/modules')->assertSuccessful();
+    $firstTouch = $user->fresh()->last_seen_at;
+
+    $this->actingAs($user)->get('/modules')->assertSuccessful();
+
+    expect($user->fresh()->last_seen_at->eq($firstTouch))->toBeTrue();
+});
+
+it('touches last_seen_at again after the throttle window elapses', function () {
+    $user = makeManagedUser();
+    $this->actingAs($user)->get('/modules')->assertSuccessful();
+    $firstTouch = $user->fresh()->last_seen_at;
+
+    $this->travel(2)->minutes();
+    $this->actingAs($user)->get('/modules')->assertSuccessful();
+
+    expect($user->fresh()->last_seen_at->gt($firstTouch))->toBeTrue();
+});
+
+it('includes last_seen_at in the users index Inertia prop', function () {
+    $superadmin = User::query()->where('username', 'kmorbita')->firstOrFail();
+    makeManagedUser(['username' => 'uam-test-activity']);
+
+    $this->actingAs($superadmin)
+        ->get('/admin/users?username=uam-test-activity')
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('Admin/Users/Index')
+            ->has('users.data', 1)
+            ->where('users.data.0.last_seen_at', null));
+});

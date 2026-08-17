@@ -37,6 +37,7 @@ class UserManagementController extends Controller
                 'username' => $user->username,
                 'email' => $user->email,
                 'is_allowed' => $user->is_allowed,
+                'last_seen_at' => $user->last_seen_at?->toISOString(),
                 'role' => $user->roles->first()?->name,
             ]);
 

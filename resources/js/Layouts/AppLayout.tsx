@@ -145,8 +145,20 @@ export default function AppLayout({ children, fullBleed = false }: PropsWithChil
                             );
                         }
 
-                        const active = currentUrl.startsWith(entry.basePath);
+                        // Some groups' default child route has no path
+                        // segment beyond the group's own prefix (e.g. Driver
+                        // Assignment's Assignments page is
+                        // /operations/driver-assignment, not .../something),
+                        // so basePath's trailing-slash startsWith() check
+                        // alone would never match while sitting on that page
+                        // - also match defaultHref exactly. A no-op for every
+                        // other entry, whose defaultHref already starts with
+                        // its basePath.
+                        const active = currentUrl === entry.defaultHref || currentUrl.startsWith(entry.basePath);
                         const childrenVisible = expandedGroups[entry.key] || active;
+                        const visibleChildren = entry.children.filter(
+                            (child) => !child.permission || isSuperadmin || userPermissions.includes(child.permission),
+                        );
 
                         return (
                             <div key={entry.key}>
@@ -170,7 +182,7 @@ export default function AppLayout({ children, fullBleed = false }: PropsWithChil
 
                                 {childrenVisible && (
                                     <div className={cn('mt-0.5 space-y-0.5 pl-6', collapsed && 'lg:hidden')}>
-                                        {entry.children.map((child) => (
+                                        {visibleChildren.map((child) => (
                                             <Link
                                                 key={child.href}
                                                 href={child.href}

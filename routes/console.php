@@ -19,6 +19,10 @@ Schedule::command('operations:sync-driver-assignment')->dailyAt('20:00');
 
 Schedule::command('operations:sync-vessel-dashboard')->hourly();
 
+// 5 minutes matches the source app's proven cadence (see
+// local-simplified-xps-v2's MSSQL_SYNC_SETUP.md / sync-containers.bat).
+Schedule::command('app:sync-container-yard')->everyFiveMinutes()->withoutOverlapping();
+
 // Keeps history accumulating even when no one has the public kiosk board
 // open in a browser (the board's own load/60s-poll also captures a
 // snapshot - see RoadQueueBoardController / RoadQueueEcdBoardController).

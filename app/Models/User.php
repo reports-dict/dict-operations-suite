@@ -29,6 +29,7 @@ class User extends Authenticatable implements LdapAuthenticatable
     {
         return [
             'is_allowed' => 'boolean',
+            'last_seen_at' => 'datetime',
         ];
     }
 

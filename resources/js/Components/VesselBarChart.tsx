@@ -1,7 +1,6 @@
 import { Bar, CartesianGrid, ComposedChart, Legend, LabelList, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { VesselGraphEntry } from '@/Pages/Operations/VesselDashboard/types';
 
-const Y_MAX = 60;
 const THRESHOLD = 20;
 const GAP = 1; // 1px inset per touching edge = 2px surface gap between stacked segments
 
@@ -100,15 +99,19 @@ export default function VesselBarChart({ graphData, vesselName }: VesselBarChart
         );
     }
 
+    // Y axis max defaults to 40 and grows to the next multiple of 10 above
+    // the tallest hourly total, so bars are never scaled down to fit.
+    const maxTotal = data.reduce((max, d) => Math.max(max, d.total || 0), 0);
+    const yMax = Math.max(40, Math.ceil(maxTotal / 10) * 10);
+    const yTicks = Array.from({ length: yMax / 10 + 1 }, (_, i) => i * 10);
+
     const chartData: ChartDatum[] = data.map((d) => {
         const total = d.total || 0;
-        const scale = total > Y_MAX ? Y_MAX / total : 1;
         const entry: ChartDatum = { label: String(d.hour), total };
         CRANES.forEach(({ key }) => {
             const raw = d[key] || 0;
-            const scaled = raw * scale;
-            entry[key] = raw > 0 ? Math.max(scaled, MIN_SEGMENT_VALUE) : 0; // scaled + floored — drives bar height
-            entry[`${key}Raw`] = raw; // true unscaled count — shown in the segment label
+            entry[key] = raw > 0 ? Math.max(raw, MIN_SEGMENT_VALUE) : 0; // floored — drives bar height
+            entry[`${key}Raw`] = raw; // true count — shown in the segment label
         });
         return entry;
     });
@@ -129,15 +132,15 @@ export default function VesselBarChart({ graphData, vesselName }: VesselBarChart
                             tickLine={false}
                         />
                         <YAxis
-                            domain={[0, Y_MAX]}
-                            ticks={[0, 15, 30, 45, 60]}
+                            domain={[0, yMax]}
+                            ticks={yTicks}
                             tick={{ fill: '#cbd5e1', fontSize: TICK_SIZE, fontWeight: 600 }}
                             axisLine={false}
                             tickLine={false}
                             label={{ value: 'Moves', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: Y_LABEL_SIZE, dy: 30 }}
                         />
 
-                        {/* Stacked bars — one segment per crane, capped at 60 with real totals labeled */}
+                        {/* Stacked bars — one segment per crane, with real totals labeled */}
                         {CRANES.map(({ key, color }, i) => {
                             const isFirst = i === 0;
                             const isLast = i === CRANES.length - 1;

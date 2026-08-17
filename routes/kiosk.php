@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Operations\ContainerYardBoardController;
+use App\Http\Controllers\Operations\ContainerYardDataController;
 use App\Http\Controllers\Operations\RoadQueueBoardController;
 use App\Http\Controllers\Operations\RoadQueueEcdBoardController;
 use App\Http\Controllers\Operations\VesselDashboardBoardController;
@@ -28,4 +30,21 @@ Route::prefix('operations')->middleware(['web'])->group(function (): void {
 
     Route::get('vessel-dashboard/data', VesselDashboardDataController::class)
         ->name('operations.vessel-dashboard.data');
+
+    // Same public posture, carried over from local-simplified-xps-v2 - the
+    // source app already let anonymous "viewers" browse the yard search/
+    // visualization without login. The board client-fetches the data/*
+    // endpoints below (see Pages/Operations/ContainerYard/Board.tsx). Block/
+    // Allocation management stays gated (routes/operations.php).
+    Route::get('container-yard/board', ContainerYardBoardController::class)
+        ->name('operations.container-yard.board');
+
+    Route::get('container-yard/data/blocks', [ContainerYardDataController::class, 'blocks'])
+        ->name('operations.container-yard.data.blocks');
+
+    Route::get('container-yard/data/containers', [ContainerYardDataController::class, 'containers'])
+        ->name('operations.container-yard.data.containers');
+
+    Route::get('container-yard/data/search', [ContainerYardDataController::class, 'liveSearch'])
+        ->name('operations.container-yard.data.search');
 });

@@ -34,17 +34,24 @@ function PhaseBadge({ phase }: { phase: string }) {
 
 const bal = (planned: number, done: number) => Math.max(0, (planned || 0) - (done || 0));
 
-// Mobile-first three-step scale (base -> sm: -> lg:) - lg: matches this
-// codebase's convention of skipping md: and preserves the exact TV-kiosk
-// sizes this table originally shipped with.
-const cell = 'text-center text-base sm:text-2xl lg:text-4xl font-extrabold px-1 sm:px-2 align-middle';
-const label = 'text-left text-xs sm:text-xl lg:text-4xl font-bold uppercase tracking-widest px-1 sm:px-2 whitespace-nowrap align-middle';
-const colHead = 'text-center text-xs sm:text-lg lg:text-3xl font-bold uppercase tracking-widest px-1 sm:px-2 py-0';
+// Fluid clamp()-based sizing keyed off the stat column's own width via CSS
+// container queries (cqw) - see the `@container` on the lg:w-1/2 wrapper
+// around StatTable/StatCards in VesselCard below. Unlike a fixed sm:/lg:
+// step scale, this keeps growing past 1024px instead of capping there,
+// which matters since this board runs on TVs/monitors well above that
+// width. MIN mirrors the old mobile size; MAX sits above the old lg: cap.
+// cqw coefficients = 100*(target_px-min_px)/900 (900px = this column's
+// real width on a 1920px-wide kiosk screen), so text is at least the old
+// lg: size on a typical TV, not just barely above the old mobile size.
+const cell = 'text-center text-[clamp(1rem,1rem_+_2.222cqw,3.5rem)] font-extrabold px-1 sm:px-2 align-middle';
+const label =
+    'text-left text-[clamp(0.75rem,0.75rem_+_2.667cqw,3.25rem)] font-bold uppercase tracking-widest px-1 sm:px-2 whitespace-nowrap align-middle';
+const colHead = 'text-center text-[clamp(0.75rem,0.75rem_+_2cqw,2.5rem)] font-bold uppercase tracking-widest px-1 sm:px-2 py-0';
 const groupHead =
-    'text-center text-xs sm:text-lg lg:text-3xl font-extrabold uppercase tracking-widest px-1 sm:px-2 py-0 border-b border-slate-600/50';
-const sectionRow = 'text-sm sm:text-xl lg:text-3xl font-extrabold uppercase tracking-widest px-1 sm:px-2 py-0.5';
-const totalLabel = 'text-xs sm:text-lg lg:text-2xl font-bold tracking-widest uppercase';
-const totalValue = 'text-sm sm:text-xl lg:text-4xl font-extrabold';
+    'text-center text-[clamp(0.75rem,0.75rem_+_2cqw,2.5rem)] font-extrabold uppercase tracking-widest px-1 sm:px-2 py-0 border-b border-slate-600/50';
+const sectionRow = 'text-[clamp(0.875rem,0.875rem_+_1.778cqw,2.5rem)] font-extrabold uppercase tracking-widest px-1 sm:px-2 py-0.5';
+const totalLabel = 'text-[clamp(0.75rem,0.75rem_+_1.333cqw,2rem)] font-bold tracking-widest uppercase';
+const totalValue = 'text-[clamp(0.875rem,0.875rem_+_2.444cqw,3.25rem)] font-extrabold';
 
 // Shared by StatTable (lg: and up) and StatCards (below lg) so the two
 // "Total Planned / Total Done / Balance" summary rows stay in sync.
@@ -215,12 +222,16 @@ function StatRowCard({
 
     return (
         <div className="flex items-center justify-between gap-2 rounded-md bg-slate-800/40 px-2 py-1.5">
-            <span className={`w-16 shrink-0 text-xs font-bold tracking-wide uppercase ${labelColor}`}>{label}</span>
+            <span
+                className={`w-16 shrink-0 text-[clamp(0.75rem,0.75rem_+_1.111cqw,1.375rem)] font-bold tracking-wide uppercase ${labelColor}`}
+            >
+                {label}
+            </span>
             <div className="grid flex-1 grid-cols-4 gap-1 text-center">
                 {values.map(([hdr, val]) => (
                     <div key={hdr}>
-                        <div className="text-[9px] text-slate-500 uppercase">{hdr}</div>
-                        <div className={`text-sm font-extrabold ${valueColor}`}>{val}</div>
+                        <div className="text-[clamp(0.5625rem,0.5625rem_+_0.556cqw,0.875rem)] text-slate-500 uppercase">{hdr}</div>
+                        <div className={`text-[clamp(0.875rem,0.875rem_+_1.111cqw,1.5rem)] font-extrabold ${valueColor}`}>{val}</div>
                     </div>
                 ))}
             </div>
@@ -320,8 +331,12 @@ function StatCards({ vessel }: { vessel: VesselVisit }) {
     );
 }
 
-// SVC/OPR/ATA/ATD chips + progress-bar labels share this scale.
-const meta = 'text-xs sm:text-lg lg:text-3xl';
+// SVC/OPR/ATA/ATD chips + progress-bar labels share this scale. Sized off
+// the card's own width (@container on VesselCard's root below), since these
+// span the full card rather than the half-width stat column. Coefficient =
+// 100*(target_px-min_px)/1600 (1600px ~= this card's real width on a
+// 1920px-wide kiosk screen).
+const meta = 'text-[clamp(0.75rem,0.75rem_+_1.125cqw,2.75rem)]';
 
 interface VesselCardProps {
     vessel: VesselVisit | undefined;
@@ -335,10 +350,12 @@ export default function VesselCard({ vessel }: VesselCardProps) {
     if (!vessel) return null;
 
     return (
-        <div className="flex h-full flex-col rounded-xl border border-slate-700 bg-slate-800/80 p-3">
+        <div className="@container flex h-full flex-col rounded-xl border border-slate-700 bg-slate-800/80 p-3">
             {/* Vessel header */}
             <div className="mb-1 flex shrink-0 flex-wrap items-center gap-2">
-                <h2 className="text-lg font-extrabold tracking-wide text-white sm:text-2xl lg:text-3xl">{vessel.vessel_name}</h2>
+                <h2 className="text-[clamp(1.125rem,1.125rem_+_0.75cqw,2.75rem)] font-extrabold tracking-wide text-white">
+                    {vessel.vessel_name}
+                </h2>
                 <PhaseBadge phase={vessel.phase} />
                 <div className="flex items-center gap-1">
                     <span className={`text-slate-500 ${meta} tracking-widest uppercase`}>SVC</span>
@@ -389,8 +406,11 @@ export default function VesselCard({ vessel }: VesselCardProps) {
 
             {/* Stat table/cards + chart - stacked (scrollable) on phones/tablets, side-by-side (fixed, no scroll) from lg: up */}
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto lg:flex-row lg:overflow-hidden">
-                {/* Left - StatTable (dense, desktop/TV) at lg: and up, StatCards (stacked, mobile-friendly) below lg: */}
-                <div className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden lg:w-1/2 lg:shrink">
+                {/* Left - StatTable (dense, desktop/TV) at lg: and up, StatCards (stacked, mobile-friendly) below lg:.
+                    @container here (not on the card root) since this column is only
+                    half the card's width at lg: - cqw inside StatTable/StatCards/
+                    TotalsRow needs to measure against this column, not the full card. */}
+                <div className="@container flex min-h-0 w-full shrink-0 flex-col overflow-hidden lg:w-1/2 lg:shrink">
                     <div className="hidden h-full lg:block">
                         <StatTable vessel={vessel} />
                     </div>

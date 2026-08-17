@@ -7,9 +7,10 @@ import Label from '@/Components/ui/Label';
 import Pagination, { PaginationLink } from '@/Components/ui/Pagination';
 import Select from '@/Components/ui/Select';
 import AppLayout from '@/Layouts/AppLayout';
+import { describeActivity } from '@/lib/utils';
 import { SharedProps } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
 
 type Role = 'superadmin' | 'admin' | 'bdd';
 
@@ -19,6 +20,7 @@ interface UserRow {
     username: string;
     email: string;
     is_allowed: boolean;
+    last_seen_at: string | null;
     role: Role | null;
 }
 
@@ -41,12 +43,21 @@ interface Props {
     filters: Filters;
 }
 
-const COLUMNS = ['User', 'Role', 'Status', 'Actions'];
+const COLUMNS = ['User', 'Role', 'Status', 'Activity', 'Actions'];
 
 export default function UserAccessIndex({ users, filters }: Props) {
     const { auth } = usePage<SharedProps>().props;
 
     const addUserForm = useForm({ username: '' });
+
+    // No network calls - just forces a re-render every 30s so "Active now"
+    // and "X ago" labels (computed from a static last_seen_at prop) don't
+    // go stale while this page is left open.
+    const [, forceTick] = useState(0);
+    useEffect(() => {
+        const id = setInterval(() => forceTick((t) => t + 1), 30_000);
+        return () => clearInterval(id);
+    }, []);
 
     const submitAddUser: FormEventHandler = (e) => {
         e.preventDefault();
@@ -149,6 +160,7 @@ export default function UserAccessIndex({ users, filters }: Props) {
             <div className="space-y-3 sm:hidden">
                 {users.data.map((row) => {
                     const isSelf = row.id === auth.user?.id;
+                    const activity = describeActivity(row.last_seen_at);
 
                     return (
                         <Card key={row.id} className="p-3">
@@ -158,6 +170,13 @@ export default function UserAccessIndex({ users, filters }: Props) {
                                     <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                                         {row.username} &middot; {row.email}
                                     </p>
+                                    {activity.active ? (
+                                        <Badge tone="green" className="mt-1">
+                                            {activity.label}
+                                        </Badge>
+                                    ) : (
+                                        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{activity.label}</p>
+                                    )}
                                 </div>
                                 <Badge tone={row.is_allowed ? 'green' : 'amber'}>{row.is_allowed ? 'Allowed' : 'Blocked'}</Badge>
                             </div>
@@ -223,6 +242,7 @@ export default function UserAccessIndex({ users, filters }: Props) {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {users.data.map((row) => {
                                 const isSelf = row.id === auth.user?.id;
+                                const activity = describeActivity(row.last_seen_at);
 
                                 return (
                                     <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -254,6 +274,13 @@ export default function UserAccessIndex({ users, filters }: Props) {
                                         </td>
                                         <td className="px-4 py-2.5 whitespace-nowrap">
                                             <Badge tone={row.is_allowed ? 'green' : 'amber'}>{row.is_allowed ? 'Allowed' : 'Blocked'}</Badge>
+                                        </td>
+                                        <td className="px-4 py-2.5 whitespace-nowrap">
+                                            {activity.active ? (
+                                                <Badge tone="green">{activity.label}</Badge>
+                                            ) : (
+                                                <span className="text-xs text-slate-500 dark:text-slate-400">{activity.label}</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-2.5 whitespace-nowrap">
                                             <div className="flex items-center gap-2">

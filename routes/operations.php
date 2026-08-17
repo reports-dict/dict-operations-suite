@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Operations\ConsigneeController;
+use App\Http\Controllers\Operations\ContainerYardManagementController;
 use App\Http\Controllers\Operations\DriverAssignmentController;
+use App\Http\Controllers\Operations\DriverAssignmentLogsController;
 use App\Http\Controllers\Operations\ReeferPluginPerCategoryController;
 use App\Http\Controllers\Operations\ReeferPluginReportController;
 use App\Http\Controllers\Operations\RoadQueueEcdHistoryController;
@@ -68,6 +70,17 @@ Route::prefix('operations')->middleware(['web', 'auth', 'allowed'])->group(funct
             ->name('operations.driver-assignment.sync-now');
     });
 
+    // Raw biometric scan log browser - gated by its own permission, separate
+    // from the base driver-assignment view, so it can be granted
+    // independently (same "-manage"/"-export" sub-permission pattern as
+    // Vessel Dashboard/Container Yard below).
+    Route::prefix('driver-assignment')->middleware('can:operations.driver-assignment-logs.view')->group(function (): void {
+        Route::get('logs', [DriverAssignmentLogsController::class, 'index'])
+            ->name('operations.driver-assignment.logs.index');
+        Route::get('logs/export', [DriverAssignmentLogsController::class, 'export'])
+            ->name('operations.driver-assignment.logs.export');
+    });
+
     // The live board for this module is intentionally public - see
     // routes/kiosk.php. Only the management dashboard below is permission-gated.
     Route::prefix('vessel-dashboard')->middleware('can:operations.vessel-dashboard.view')->group(function (): void {
@@ -85,6 +98,34 @@ Route::prefix('operations')->middleware(['web', 'auth', 'allowed'])->group(funct
             ->name('operations.vessel-dashboard.overrides.destroy');
         Route::post('sync-now', [VesselDashboardManagementController::class, 'syncNow'])
             ->name('operations.vessel-dashboard.sync-now');
+    });
+
+    // The live board for this module is intentionally public - see
+    // routes/kiosk.php. Only the management dashboard below is permission-gated.
+    Route::prefix('container-yard')->middleware('can:operations.container-yard.view')->group(function (): void {
+        Route::get('management', [ContainerYardManagementController::class, 'index'])
+            ->name('operations.container-yard.management');
+        Route::post('sync-now', [ContainerYardManagementController::class, 'syncNow'])
+            ->name('operations.container-yard.sync-now');
+    });
+
+    // Block/Allocation CRUD are mutating actions - gated by a separate
+    // permission from plain viewing above, so granting one no longer
+    // implies the other.
+    Route::prefix('container-yard')->middleware('can:operations.container-yard-manage.view')->group(function (): void {
+        Route::post('blocks', [ContainerYardManagementController::class, 'storeBlock'])
+            ->name('operations.container-yard.blocks.store');
+        Route::put('blocks/{block}', [ContainerYardManagementController::class, 'updateBlock'])
+            ->name('operations.container-yard.blocks.update');
+        Route::delete('blocks/{block}', [ContainerYardManagementController::class, 'destroyBlock'])
+            ->name('operations.container-yard.blocks.destroy');
+
+        Route::post('allocations', [ContainerYardManagementController::class, 'storeAllocation'])
+            ->name('operations.container-yard.allocations.store');
+        Route::put('allocations/{allocation}', [ContainerYardManagementController::class, 'updateAllocation'])
+            ->name('operations.container-yard.allocations.update');
+        Route::delete('allocations/{allocation}', [ContainerYardManagementController::class, 'destroyAllocation'])
+            ->name('operations.container-yard.allocations.destroy');
     });
 
     // Read-only consignee/customer reference list (DICT_BS.dbo.DCSCustomer) -

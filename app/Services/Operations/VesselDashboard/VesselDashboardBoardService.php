@@ -317,7 +317,7 @@ MoveData AS (
         DATEADD(HOUR, DATEDIFF(HOUR, 0,
             CASE mv_event.move_kind WHEN 'DSCH' THEN mv_event.t_discharge ELSE mv_event.t_put END), 0),
         COALESCE(xps_che.full_name, 'UNKR')
-    HAVING COALESCE(xps_che.full_name, 'UNKR') <> 'UNKR'
+    --HAVING COALESCE(xps_che.full_name, 'UNKR') <> 'UNKR'
 ),
 ECINData AS (
     SELECT

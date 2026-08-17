@@ -1,4 +1,4 @@
-import { LucideIcon, Ship, Snowflake, Truck, UserCog, Users, Warehouse } from 'lucide-react';
+import { Container, LucideIcon, Ship, Snowflake, Truck, UserCog, Users, Warehouse } from 'lucide-react';
 
 // Single source of truth for both the sidebar nav (AppLayout.tsx) and the
 // Modules landing page (Pages/Modules.tsx) - previously each hardcoded its
@@ -15,6 +15,11 @@ import { LucideIcon, Ship, Snowflake, Truck, UserCog, Users, Warehouse } from 'l
 export interface ModuleNavChild {
     href: string;
     label: string;
+    // Overrides the group's own permission check for this specific child
+    // link - e.g. a sub-page gated by a separate, independently-grantable
+    // permission from the rest of the group (see the `driver-assignment`
+    // entry's "Biometrics Logs" child below).
+    permission?: string;
 }
 
 interface ModuleNavBase {
@@ -103,10 +108,15 @@ export const MODULE_NAV: ModuleNavEntry[] = [
         key: 'driver-assignment',
         navLabel: 'Driver Assignment',
         cardName: 'Driver Assignment',
-        description: 'Assign on-duty Prime Mover Drivers to trucks.',
+        description: 'Assign on-duty Prime Mover Drivers to trucks, plus biometrics log lookup.',
         icon: UserCog,
-        shape: 'flat',
-        href: '/operations/driver-assignment',
+        shape: 'group',
+        basePath: '/operations/driver-assignment/',
+        defaultHref: '/operations/driver-assignment',
+        children: [
+            { href: '/operations/driver-assignment', label: 'Assignments' },
+            { href: '/operations/driver-assignment/logs', label: 'Biometrics Logs', permission: 'operations.driver-assignment-logs.view' },
+        ],
     },
     {
         key: 'vessel-dashboard',
@@ -120,6 +130,20 @@ export const MODULE_NAV: ModuleNavEntry[] = [
         children: [
             { href: '/operations/vessel-dashboard/board', label: 'Board' },
             { href: '/operations/vessel-dashboard/management', label: 'Management' },
+        ],
+    },
+    {
+        key: 'container-yard',
+        navLabel: 'Container Yard',
+        cardName: 'Container Yard',
+        description: 'Yard container positions (Block/Bay/Row/Tier) - live board plus Block & Allocation management.',
+        icon: Container,
+        shape: 'group',
+        basePath: '/operations/container-yard/',
+        defaultHref: '/operations/container-yard/management',
+        children: [
+            { href: '/operations/container-yard/board', label: 'Board' },
+            { href: '/operations/container-yard/management', label: 'Management' },
         ],
     },
 ];

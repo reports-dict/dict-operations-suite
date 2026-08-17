@@ -14,11 +14,13 @@ const FEATURES = [
 ];
 
 // Derived from MODULE_NAV (resources/js/lib/modules.ts) rather than a third
-// hardcoded list - naturally yields just the two public Road Queue boards,
-// since only their groups have a child labeled "Board".
+// hardcoded list - naturally yields just the public boards, since only their
+// groups have a child labeled "Board".
 const BOARD_LINKS = MODULE_NAV.flatMap((entry) =>
     entry.shape === 'group'
-        ? entry.children.filter((child) => child.label === 'Board').map((child) => ({ name: entry.cardName, href: child.href }))
+        ? entry.children
+              .filter((child) => child.label === 'Board')
+              .map((child) => ({ name: entry.cardName, href: child.href, icon: entry.icon }))
         : [],
 );
 
@@ -136,17 +138,23 @@ export default function Login({ status }: { status?: string }) {
                         Need access? Contact a superadmin to request it.
                     </p>
 
-                    <p className="mt-3 text-center text-xs text-slate-400 dark:text-slate-600">
-                        Live boards:{' '}
-                        {BOARD_LINKS.map((link, i) => (
-                            <span key={link.href}>
-                                {i > 0 && ' · '}
-                                <Link href={link.href} className="text-green-600 hover:underline dark:text-green-400">
-                                    {link.name}
-                                </Link>
-                            </span>
-                        ))}
-                    </p>
+                    {BOARD_LINKS.length > 0 && (
+                        <div className="mt-4">
+                            <p className="text-center text-xs text-slate-400 dark:text-slate-600">Live boards</p>
+                            <div className="mt-1.5 flex flex-wrap justify-center gap-1.5">
+                                {BOARD_LINKS.map(({ href, name, icon: Icon }) => (
+                                    <Link
+                                        key={href}
+                                        href={href}
+                                        className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/15"
+                                    >
+                                        <Icon className="size-3.5" strokeWidth={2} />
+                                        {name}
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <p className="mt-3 text-center text-xs text-slate-400 lg:hidden dark:text-slate-600">
                         &copy; {year} Davao International Container Terminal, Inc.
