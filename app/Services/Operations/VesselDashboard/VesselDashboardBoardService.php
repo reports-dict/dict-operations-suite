@@ -41,6 +41,17 @@ class VesselDashboardBoardService
             ->groupBy('ob_ib_id');
     }
 
+    /**
+     * Per-truck crane-move breakdown for a single vessel + hour window,
+     * drilled into from a clicked bar-chart segment on the board.
+     * $windowStart/$windowEnd are 'Y-m-d H:i:s' strings, half-open
+     * [windowStart, windowEnd).
+     */
+    public function fetchHourDetail(string $obIbId, string $windowStart, string $windowEnd): array
+    {
+        return DB::connection('sparcsn4')->select($this->hourDetailQuery(), [$obIbId, $windowStart, $windowEnd]);
+    }
+
     private function query(): string
     {
         return <<<'SQL'
@@ -357,6 +368,67 @@ LEFT JOIN FirstActive fa ON fd.ob_ib_id = fa.ob_ib_id
 WHERE fd.hour_bucket >= ISNULL(fa.first_hour, @StartHour)
 ORDER BY fd.ob_ib_id, fd.hour_bucket
 OPTION (MAXRECURSION 24)
+SQL;
+    }
+
+    /**
+     * Per-truck move count + aggregated driver/crane names for one vessel
+     * within a single hour window. Same inv_move_event/xps_che tables as
+     * craneGraphQuery() above, joined out to xps_ecuser for the driver name,
+     * scoped to QC cranes and load/discharge moves only - ported from
+     * dict-portal's DashboardController::hourDetailQuery().
+     */
+    private function hourDetailQuery(): string
+    {
+        return <<<'SQL'
+WITH move_data AS (
+    SELECT
+        che.short_name,
+        ec_user.name AS driver_name,
+        mv_event.pow,
+        CASE WHEN mv_event.move_kind = 'LOAD' THEN mv_event.t_put ELSE mv_event.t_discharge END AS move_time
+    FROM [sparcsn4].[dbo].[inv_move_event] mv_event
+    INNER JOIN [sparcsn4].[dbo].[xps_che] che ON mv_event.che_carry = che.gkey
+    LEFT JOIN [sparcsn4].[dbo].[xps_ecuser] ec_user ON mv_event.che_carry_login_name = ec_user.user_id
+    WHERE mv_event.pow LIKE 'QC%'
+      AND che.short_name LIKE 'T%'
+      AND mv_event.move_kind IN ('LOAD','DSCH')
+      AND mv_event.carrier_gkey = ?
+),
+windowed AS (
+    SELECT * FROM move_data
+    WHERE move_time >= ? AND move_time < ?
+),
+counts AS (
+    SELECT short_name, COUNT(*) AS move_count
+    FROM windowed
+    GROUP BY short_name
+),
+distinct_drivers AS (
+    SELECT DISTINCT short_name, driver_name FROM windowed
+),
+agg_drivers AS (
+    SELECT short_name, STRING_AGG(driver_name, ', ') AS drivers
+    FROM distinct_drivers
+    GROUP BY short_name
+),
+distinct_pow AS (
+    SELECT DISTINCT short_name, pow FROM windowed
+),
+agg_pow AS (
+    SELECT short_name, STRING_AGG(pow, ', ') AS pows
+    FROM distinct_pow
+    GROUP BY short_name
+)
+SELECT
+    c.short_name AS truck,
+    c.move_count,
+    d.drivers,
+    p.pows
+FROM counts c
+LEFT JOIN agg_drivers d ON c.short_name = d.short_name
+LEFT JOIN agg_pow p ON c.short_name = p.short_name
+ORDER BY c.move_count DESC
 SQL;
     }
 }

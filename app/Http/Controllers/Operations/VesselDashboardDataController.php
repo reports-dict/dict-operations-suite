@@ -78,7 +78,11 @@ class VesselDashboardDataController extends Controller
 
             $vessel->graph = $rows->groupBy('hour_bucket')->map(function ($hourRows) use ($craneKeys) {
                 $entry = array_merge(
-                    ['hour' => (int) $hourRows->first()->move_hour, 'total' => 0],
+                    [
+                        'hour' => (int) $hourRows->first()->move_hour,
+                        'hour_bucket' => (string) $hourRows->first()->hour_bucket,
+                        'total' => 0,
+                    ],
                     array_fill_keys($craneKeys, 0)
                 );
 

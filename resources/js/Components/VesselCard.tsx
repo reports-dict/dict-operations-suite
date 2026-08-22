@@ -340,9 +340,10 @@ const meta = 'text-[clamp(0.75rem,0.75rem_+_1.125cqw,2.75rem)]';
 
 interface VesselCardProps {
     vessel: VesselVisit | undefined;
+    onHourClick?: (hourBucket: string, hourLabel: number, cranes: string[]) => void;
 }
 
-export default function VesselCard({ vessel }: VesselCardProps) {
+export default function VesselCard({ vessel, onHourClick }: VesselCardProps) {
     const fmt = (dt: string | null) => (dt ? new Date(dt).toLocaleString() : null);
     const elapsed = useElapsed(vessel?.actual_time_of_arrival ?? null);
     const isNarrowViewport = useNarrowViewport();
@@ -434,7 +435,7 @@ export default function VesselCard({ vessel }: VesselCardProps) {
                             className="h-full"
                             style={isNarrowViewport ? { minWidth: Math.max((vessel.graph?.length ?? 0) * 44, 560) } : undefined}
                         >
-                            <VesselBarChart graphData={vessel.graph} vesselName={vessel.vessel_name} />
+                            <VesselBarChart graphData={vessel.graph} vesselName={vessel.vessel_name} onBarClick={onHourClick} />
                         </div>
                     </div>
                 </div>

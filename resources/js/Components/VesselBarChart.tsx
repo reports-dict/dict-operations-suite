@@ -1,3 +1,4 @@
+import { MousePointerClick } from 'lucide-react';
 import { Bar, CartesianGrid, ComposedChart, Legend, LabelList, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { VesselGraphEntry } from '@/Pages/Operations/VesselDashboard/types';
 
@@ -26,6 +27,10 @@ const STACK_ORDER: CraneKey[] = ['ECIN', 'QC3', 'QC2', 'QC1', 'QC4', 'UNKR'];
 const LEGEND_ORDER: CraneKey[] = ['QC1', 'QC2', 'QC3', 'QC4', 'UNKR', 'ECIN'];
 
 const CRANES = STACK_ORDER.map((key) => ({ key, color: CRANE_COLORS[key] }));
+
+// Physical cranes Supabase can be scoped to — excludes UNKR/ECIN, which
+// aren't real crane locations in Supabase's `locations` table.
+const SUPABASE_CRANE_KEYS = ['QC1', 'QC2', 'QC3', 'QC4'] as const;
 
 interface StackSegmentProps {
     x: number;
@@ -68,6 +73,7 @@ interface ChartDatum {
 interface VesselBarChartProps {
     graphData: VesselGraphEntry[] | null;
     vesselName: string;
+    onBarClick?: (hourBucket: string, hourLabel: number, cranes: string[]) => void;
 }
 
 // Fixed sizes rather than viewport-driven scaling - this codebase has no
@@ -84,7 +90,7 @@ const REF_SIZE = 12;
 const Y_LABEL_SIZE = 13;
 const LEGEND_SIZE = 11;
 
-export default function VesselBarChart({ graphData, vesselName }: VesselBarChartProps) {
+export default function VesselBarChart({ graphData, vesselName, onBarClick }: VesselBarChartProps) {
     const data = graphData ?? null;
 
     if (data === null) {
@@ -107,7 +113,14 @@ export default function VesselBarChart({ graphData, vesselName }: VesselBarChart
 
     const chartData: ChartDatum[] = data.map((d) => {
         const total = d.total || 0;
-        const entry: ChartDatum = { label: String(d.hour), total };
+        const entry: ChartDatum = {
+            label: String(d.hour),
+            total,
+            hourBucket: d.hour_bucket,
+            // Comma-joined since ChartDatum values are string|number only —
+            // parsed back into a list in the click handler below.
+            cranes: SUPABASE_CRANE_KEYS.filter((key) => (d[key] || 0) > 0).join(','),
+        };
         CRANES.forEach(({ key }) => {
             const raw = d[key] || 0;
             entry[key] = raw > 0 ? Math.max(raw, MIN_SEGMENT_VALUE) : 0; // floored — drives bar height
@@ -121,6 +134,14 @@ export default function VesselBarChart({ graphData, vesselName }: VesselBarChart
             <p className="mb-1 shrink-0 text-center text-[10px] tracking-widest text-slate-400 uppercase sm:text-xs lg:text-base">
                 {vesselName} — Moves Per Hour by Crane
             </p>
+            {onBarClick && (
+                <div className="mb-1 flex shrink-0 items-center justify-center">
+                    <div className="flex items-center gap-1.5 rounded-full border border-cyan-500/50 bg-slate-800 px-3 py-1 text-xs font-semibold text-cyan-300 shadow-lg shadow-black/40">
+                        <MousePointerClick className="h-3.5 w-3.5" />
+                        Tap a bar for hourly breakdown
+                    </div>
+                </div>
+            )}
             <div className="min-h-0 flex-1">
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
@@ -151,6 +172,24 @@ export default function VesselBarChart({ graphData, vesselName }: VesselBarChart
                                     stackId="moves"
                                     fill={color}
                                     isAnimationActive={false}
+                                    style={onBarClick ? { cursor: 'pointer' } : undefined}
+                                    onClick={
+                                        onBarClick
+                                            ? (barData: { payload?: Record<string, unknown> }) => {
+                                                  const hourBucket = barData.payload?.hourBucket;
+                                                  const label = barData.payload?.label;
+                                                  const cranes = barData.payload?.cranes;
+
+                                                  if (typeof hourBucket === 'string' && typeof label === 'string') {
+                                                      onBarClick(
+                                                          hourBucket,
+                                                          Number(label),
+                                                          typeof cranes === 'string' && cranes !== '' ? cranes.split(',') : [],
+                                                      );
+                                                  }
+                                              }
+                                            : undefined
+                                    }
                                     shape={(props: unknown) => {
                                         const p = props as StackSegmentProps;
                                         return <StackSegment {...p} gapTop={!isFirst} gapBottom={!isLast} radius={isLast ? 4 : 0} />;

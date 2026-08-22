@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import VesselCard from '@/Components/VesselCard';
+import VesselHourDetailModal from '@/Components/VesselHourDetailModal';
 import { SharedProps } from '@/types';
 import { usePage } from '@inertiajs/react';
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -7,6 +8,15 @@ import { DashboardDataResponse, VesselVisit } from './types';
 
 const REFRESH_INTERVAL = 60;
 const SLIDE_INTERVAL = 30;
+const DRILLDOWN_AUTO_RESUME = 60;
+
+interface Drilldown {
+    obIbId: string;
+    vesselName: string;
+    hourBucket: string;
+    hourLabel: number;
+    cranes: string[];
+}
 
 function WaveLoader({ progressPct, fetching }: { progressPct: number; fetching: boolean }) {
     const waveDuration = fetching ? '1.2s' : '3s';
@@ -149,10 +159,12 @@ export default function VesselDashboardBoard() {
     const [animating, setAnimating] = useState(false);
     const [slideCountdown, setSlideCountdown] = useState(SLIDE_INTERVAL);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [drilldown, setDrilldown] = useState<Drilldown | null>(null);
     const activeIdxRef = useRef(0);
     const vesselsRef = useRef<VesselVisit[]>([]);
     const slideTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
     const slideTickRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+    const autoResumeRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const fetchData = useCallback(async () => {
         setFetching(true);
@@ -207,6 +219,31 @@ export default function VesselDashboardBoard() {
             clearInterval(slideTimerRef.current);
             clearInterval(slideTickRef.current);
         };
+    }, [startSlideTimer]);
+
+    const openDrilldown = useCallback(
+        (hourBucket: string, hourLabel: number, cranes: string[]) => {
+            const vessel = vesselsRef.current[activeIdxRef.current];
+            if (!vessel) return;
+
+            clearInterval(slideTimerRef.current);
+            clearInterval(slideTickRef.current);
+            clearTimeout(autoResumeRef.current);
+
+            setDrilldown({ obIbId: vessel.ob_ib_id, vesselName: vessel.vessel_name, hourBucket, hourLabel, cranes });
+
+            autoResumeRef.current = setTimeout(() => {
+                setDrilldown(null);
+                startSlideTimer();
+            }, DRILLDOWN_AUTO_RESUME * 1000);
+        },
+        [startSlideTimer],
+    );
+
+    const closeDrilldown = useCallback(() => {
+        clearTimeout(autoResumeRef.current);
+        setDrilldown(null);
+        startSlideTimer();
     }, [startSlideTimer]);
 
     useEffect(() => {
@@ -316,7 +353,7 @@ export default function VesselDashboardBoard() {
                             className={`min-h-0 flex-1 ${!animating ? (slideDir === 'left' ? 'slide-in-left' : 'slide-in-right') : ''}`}
                             style={{ opacity: animating ? 0 : undefined }}
                         >
-                            <VesselCard vessel={vessels[activeIdx]} />
+                            <VesselCard vessel={vessels[activeIdx]} onHourClick={openDrilldown} />
                         </div>
 
                         {/* Dot indicators + countdown — only when multiple vessels */}
@@ -361,6 +398,16 @@ export default function VesselDashboardBoard() {
                 <span>•</span>
                 <span>Auto-refreshes every {REFRESH_INTERVAL}s</span>
             </footer>
+
+            <VesselHourDetailModal
+                obIbId={drilldown?.obIbId ?? null}
+                vesselName={drilldown?.vesselName ?? ''}
+                hourBucket={drilldown?.hourBucket ?? null}
+                hourLabel={drilldown?.hourLabel ?? null}
+                cranes={drilldown?.cranes ?? []}
+                isOpen={drilldown !== null}
+                onClose={closeDrilldown}
+            />
         </div>
     );
 

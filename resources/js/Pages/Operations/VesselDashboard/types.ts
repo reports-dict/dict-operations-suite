@@ -1,5 +1,6 @@
 export interface VesselGraphEntry {
     hour: number;
+    hour_bucket: string;
     total: number;
     QC1: number;
     QC2: number;
@@ -7,6 +8,31 @@ export interface VesselGraphEntry {
     QC4: number;
     UNKR: number;
     ECIN: number;
+}
+
+export interface HourDetailSource<T> {
+    data: T[];
+    error: string | null;
+}
+
+export interface HourDetailTruckRow {
+    truck: string;
+    move_count: number;
+    drivers: string | null;
+    pows: string | null;
+}
+
+export interface HourDetailTruckModelRow {
+    model: string;
+    move_count: number;
+    locations: string;
+    drivers: string;
+}
+
+export interface HourDetailResponse {
+    hour_bucket: string;
+    sqlsrv: HourDetailSource<HourDetailTruckRow>;
+    supabase: HourDetailSource<HourDetailTruckModelRow>;
 }
 
 export interface VesselVisit {

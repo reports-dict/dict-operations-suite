@@ -6,6 +6,7 @@ use App\Http\Controllers\Operations\RoadQueueBoardController;
 use App\Http\Controllers\Operations\RoadQueueEcdBoardController;
 use App\Http\Controllers\Operations\VesselDashboardBoardController;
 use App\Http\Controllers\Operations\VesselDashboardDataController;
+use App\Http\Controllers\Operations\VesselDashboardHourDetailController;
 use Illuminate\Support\Facades\Route;
 
 // Deliberately public/unauthenticated routes - do NOT add `auth`/`allowed`/
@@ -30,6 +31,11 @@ Route::prefix('operations')->middleware(['web'])->group(function (): void {
 
     Route::get('vessel-dashboard/data', VesselDashboardDataController::class)
         ->name('operations.vessel-dashboard.data');
+
+    // Hour-bar drilldown, clicked from the chart in Board.tsx - public for
+    // the same reason the board/data routes above are.
+    Route::get('vessel-dashboard/data/{obIbId}/hour', VesselDashboardHourDetailController::class)
+        ->name('operations.vessel-dashboard.data.hour');
 
     // Same public posture, carried over from local-simplified-xps-v2 - the
     // source app already let anonymous "viewers" browse the yard search/
