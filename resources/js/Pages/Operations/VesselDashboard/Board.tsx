@@ -32,23 +32,39 @@ const SCHEDULE_GRID_CAPACITY = MAX_GRID_COLUMNS * MAX_GRID_ROWS;
 
 type ViewMode = 'vessels' | 'schedule';
 
+// Matches this app's Tailwind sm/lg breakpoints (640px/1024px) so the
+// schedule grid's column cap tracks the same widths the rest of the app
+// treats as "phone" / "tablet" / "desktop-or-bigger" at, rather than
+// picking its own arbitrary numbers.
+const MOBILE_MAX_COLUMNS = 1;
+const TABLET_MAX_COLUMNS = 2;
+function viewportMaxColumnsFor(width: number): number {
+    if (width < 640) return MOBILE_MAX_COLUMNS;
+    if (width < 1024) return TABLET_MAX_COLUMNS;
+    return MAX_GRID_COLUMNS;
+}
+
 // Near-square columns/rows computed purely from the entry count (no pixel
-// measurement - matches this module's existing fixed-sizing precedent, see
-// VesselBarChart.tsx's own comment on the same point) so the schedule grid
-// always exactly fills the available area with no scrollbar for any
-// realistic count - this is a kiosk/TV board, nobody can scroll it. Capped
-// at MAX_GRID_COLUMNS x MAX_GRID_ROWS; beyond that, extra entries fall into
-// an auto-generated row sized by content instead of shrinking indefinitely,
-// which naturally re-enables scrolling as a graceful fallback.
-function scheduleGridDims(total: number) {
+// measurement beyond the maxColumns cap itself - matches this module's
+// existing fixed-sizing precedent, see VesselBarChart.tsx's own comment on
+// the same point) so the schedule grid always exactly fills the available
+// area with no scrollbar for any realistic count - this is a kiosk/TV
+// board, nobody can scroll it. maxColumns lets the caller narrow the cap
+// below MAX_GRID_COLUMNS for small viewports (see viewportMaxColumnsFor) -
+// without it, a phone would always get up to 5 razor-thin columns instead
+// of stacking. Beyond MAX_GRID_COLUMNS x MAX_GRID_ROWS, extra entries fall
+// into an auto-generated row sized by content instead of shrinking
+// indefinitely, which naturally re-enables scrolling as a graceful
+// fallback.
+function scheduleGridDims(total: number, maxColumns: number = MAX_GRID_COLUMNS) {
     if (total <= 0) return { columns: 1, rows: 1 };
     // Minimize rows first (maximizes height available per row - this
     // card's content is taller than a near-square sqrt(total) split gives
     // it credit for), then pick the smallest column count that exactly
     // covers total in that many rows, avoiding both empty cells and
     // needlessly narrow columns.
-    const rows = Math.min(MAX_GRID_ROWS, Math.max(1, Math.ceil(total / MAX_GRID_COLUMNS)));
-    const columns = Math.min(MAX_GRID_COLUMNS, Math.max(1, Math.ceil(total / rows)));
+    const rows = Math.min(MAX_GRID_ROWS, Math.max(1, Math.ceil(total / maxColumns)));
+    const columns = Math.min(maxColumns, Math.max(1, Math.ceil(total / rows)));
     return { columns, rows };
 }
 
@@ -243,6 +259,9 @@ export default function VesselDashboardBoard() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [drilldown, setDrilldown] = useState<Drilldown | null>(null);
     const [autoScroll, setAutoScroll] = useState(false);
+    const [gridMaxColumns, setGridMaxColumns] = useState(() =>
+        typeof window === 'undefined' ? MAX_GRID_COLUMNS : viewportMaxColumnsFor(window.innerWidth),
+    );
     const activeIdxRef = useRef(0);
     const vesselsRef = useRef<VesselVisit[]>([]);
     const viewModeRef = useRef<ViewMode>('vessels');
@@ -413,6 +432,16 @@ export default function VesselDashboardBoard() {
         const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
         document.addEventListener('fullscreenchange', onFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+    }, []);
+
+    // Keeps the schedule grid's column cap in sync with the viewport - a
+    // phone rotating, or this page opening in a resizable browser window
+    // instead of a fixed TV resolution, should re-flow the grid rather than
+    // staying pinned to whatever cap applied on first render.
+    useEffect(() => {
+        const onResize = () => setGridMaxColumns(viewportMaxColumnsFor(window.innerWidth));
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
     }, []);
 
     // Drives the schedule grid's auto-scroll mode - a smooth, continuous
@@ -605,13 +634,19 @@ export default function VesselDashboardBoard() {
                         // entries, which forced a 5x4 grid whose bottom rows scrolled off
                         // screen with no visible affordance to reach them).
                         (() => {
-                            const { columns, rows } = scheduleGridDims(visibleSchedules.length);
+                            const { columns, rows } = scheduleGridDims(visibleSchedules.length, gridMaxColumns);
                             return (
                                 <div
                                     className="grid min-h-0 flex-1 gap-4 overflow-y-auto"
                                     style={{
                                         gridTemplateColumns: `repeat(${columns}, 1fr)`,
-                                        gridTemplateRows: `repeat(${rows}, minmax(300px, auto))`,
+                                        // 1fr when there's exactly one row - provably safe (no
+                                        // other row to squeeze against, so it always equals the
+                                        // full container height) and fills the screen instead of
+                                        // sizing to just the card's content. Falls back to auto
+                                        // automatically if a future feed cap raise ever produces
+                                        // a 2nd/3rd row again (see the comment above).
+                                        gridTemplateRows: `repeat(${rows}, minmax(300px, ${rows === 1 ? '1fr' : 'auto'}))`,
                                         gridAutoRows: 'minmax(300px, auto)',
                                         alignContent: 'center',
                                     }}

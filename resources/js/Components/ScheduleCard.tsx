@@ -18,18 +18,23 @@ function splitDateTime(dt: string): { date: string; time: string } {
 // @container/cqw fluid sizing (same convention VesselCard uses) so text
 // tracks this card's own rendered width, whether it's alone and full-width
 // in the schedule grid or one of several narrower cells. Coefficient =
-// 100*(target_px-min_px)/1600 (1600px ~= this card's width when it's the
-// sole/full-width entry on a 1920px-wide kiosk screen).
-const metaLabel = 'text-[clamp(0.7rem,0.7rem_+_0.5cqw,1.1rem)] tracking-widest text-emerald-200/60 uppercase';
-const metaValue = 'text-[clamp(0.8rem,0.8rem_+_0.6cqw,1.25rem)] font-bold text-emerald-50';
-const eventLabel = 'text-[clamp(0.7rem,0.7rem_+_0.6cqw,1.15rem)] font-semibold tracking-widest text-emerald-200/60 uppercase';
-const eventTime = 'mt-1 text-[clamp(1.25rem,1.25rem_+_2.2cqw,3.5rem)] font-extrabold text-white';
-const eventDate = 'text-[clamp(1.25rem,1.25rem_+_2.2cqw,3.5rem)] font-semibold text-emerald-100/80';
-const statLabel = 'text-[clamp(0.65rem,0.65rem_+_0.5cqw,1rem)] tracking-widest text-emerald-200/60 uppercase';
-const statValue = 'mt-1 text-[clamp(1rem,1rem_+_1.3cqw,2.25rem)] font-extrabold text-white';
+// (max_rem-min_rem)*1600/target_px, target_px=620 (~this card's actual
+// width in the now-common 3-column case, since the schedule feed is capped
+// at 3 entries). A previous pass used target_px=750 *and* much bigger max
+// ceilings at the same time - the two changes compounded and badly
+// overshot (vessel names wrapping and overflowing the card). This pass
+// keeps the ceilings modest and only recalibrates the target width, so
+// ~620px reaches close to (not far past) each max.
+const metaLabel = 'text-[clamp(0.7rem,0.7rem_+_0.5cqw,0.9rem)] tracking-widest text-emerald-200/60 uppercase';
+const metaValue = 'text-[clamp(0.8rem,0.8rem_+_0.8cqw,1.1rem)] font-bold text-emerald-50';
+const eventLabel = 'text-[clamp(0.7rem,0.7rem_+_0.65cqw,0.95rem)] font-semibold tracking-widest text-emerald-200/60 uppercase';
+const eventTime = 'mt-1 text-[clamp(1.25rem,1.25rem_+_4.5cqw,3rem)] font-extrabold text-white';
+const eventDate = 'text-[clamp(1.25rem,1.25rem_+_4.5cqw,3rem)] font-semibold text-emerald-100/80';
+const statLabel = 'text-[clamp(0.65rem,0.65rem_+_0.5cqw,0.85rem)] tracking-widest text-emerald-200/60 uppercase';
+const statValue = 'mt-1 text-[clamp(1rem,1rem_+_1.9cqw,1.75rem)] font-extrabold text-white';
 
 function Divider() {
-    return <div className="my-3 h-px w-full shrink-0 bg-emerald-400/20 @sm:my-4" />;
+    return <div className="my-4 h-px w-full shrink-0 bg-emerald-400/20 @sm:my-6" />;
 }
 
 interface ScheduleCardProps {
@@ -69,11 +74,14 @@ export default function ScheduleCard({ schedule, rank = 0, total = 1, displayInd
     const etd = splitDateTime(schedule.etd);
 
     return (
-        <div className="@container relative flex h-full w-full flex-col overflow-hidden rounded-xl border p-4 @sm:p-6" style={cardStyle}>
+        <div
+            className="@container relative flex h-full w-full flex-col overflow-hidden rounded-xl border p-6 @sm:p-8"
+            style={cardStyle}
+        >
             {/* Sort-order badge - 1-based position among all visible cards,
                 corner-placed so it doesn't collide with the centered
                 Scheduled/On Dock pill below. */}
-            <div className="absolute top-2 left-2 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/30 bg-black/55 text-[clamp(1rem,1rem_+_1cqw,2.25rem)] font-extrabold text-white @sm:top-3 @sm:left-3 @sm:h-14 @sm:w-14">
+            <div className="absolute top-2 left-2 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/30 bg-black/55 text-[clamp(1rem,1rem_+_1.2cqw,2.75rem)] font-extrabold text-white @sm:top-3 @sm:left-3 @sm:h-14 @sm:w-14">
                 {displayIndex}
             </div>
 
@@ -92,7 +100,7 @@ export default function ScheduleCard({ schedule, rank = 0, total = 1, displayInd
                         <span className="text-xs font-bold tracking-widest text-amber-400 uppercase @sm:text-sm">Scheduled</span>
                     </div>
                 )}
-                <h2 className="text-[clamp(1.125rem,1.125rem_+_2.25cqw,4.5rem)] font-extrabold tracking-wide text-white">
+                <h2 className="text-[clamp(1.125rem,1.125rem_+_4.8cqw,3rem)] font-extrabold tracking-wide text-white">
                     {schedule.vessel_name}
                 </h2>
                 <div className="mt-1.5 flex flex-wrap items-baseline justify-center gap-x-4 gap-y-1">
