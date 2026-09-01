@@ -23,6 +23,23 @@ class VesselDashboardBoardService
     }
 
     /**
+     * Upcoming/current vessel feed for VesselScheduleSyncService, distinct
+     * from fetchActiveVessels() above - includes INBOUND (not-yet-arrived)
+     * vessels since a schedule needs to exist before a vessel shows up on
+     * the live board, and carries eta/etd/berth/service/line-op so the sync
+     * can own a schedule row's fields other than estimated_moves. gkey is
+     * the same identifier fetchActiveVessels() aliases ob_ib_id above - it's
+     * what lets the sync link a schedule directly to a live vessel without
+     * name-matching once SPARCS has seen it at least once.
+     */
+    public function fetchScheduleFeed(): array
+    {
+        DB::reconnect('sparcsn4');
+
+        return DB::connection('sparcsn4')->select($this->scheduleFeedQuery());
+    }
+
+    /**
      * Batched, per-hour, per-crane move totals for all active vessels over
      * the trailing 24 hours.
      */
@@ -284,6 +301,42 @@ INNER JOIN [sparcsn4].[dbo].ref_carrier_service as ref_c_service ON argo_vd.serv
 INNER JOIN [sparcsn4].[dbo].ref_bizunit_scoped as ref_biz ON ref_biz.gkey=vvsl_vd.bizu_gkey
 WHERE argo_cv.phase IN ('40WORKING','30ARRIVED') AND argo_cv.carrier_mode='VESSEL'
 ORDER BY argo_cv.gkey DESC
+SQL;
+    }
+
+    /**
+     * STUFF(argo_cv.phase, 1, 2, '') strips SPARCS's numeric phase prefix,
+     * so PHP sees 'INBOUND'/'ARRIVED'/'WORKING' only (the WHERE clause below
+     * guarantees no other value reaches PHP) - VesselScheduleSyncService
+     * maps that directly to a schedule status. No bound parameters - this
+     * is a static filter, same as query() above.
+     */
+    private function scheduleFeedQuery(): string
+    {
+        return <<<'SQL'
+SELECT
+    argo_cv.gkey,
+    vvsl.name as vessel_name,
+    CAST(ROUND(vvsl_cls.loa_cm / 100.0, 2) AS DECIMAL(10,2)) as loa_meters,
+    argo_vd.eta,
+    argo_vd.etd,
+    STUFF(argo_cv.phase, 1, 2, '') as phase,
+    vvsl_vd.flex_string01 as berth,
+    carrier_service_ib.id AS vessel_service,
+    bizunit.id AS line_op
+FROM
+    [sparcsn4].[dbo].[vsl_vessels] as vvsl
+    INNER JOIN [sparcsn4].[dbo].[vsl_vessel_visit_details] as vvsl_vd ON vvsl.gkey = vvsl_vd.vessel_gkey
+    INNER JOIN [sparcsn4].[dbo].[vsl_vessel_classes] as vvsl_cls ON vvsl.vesclass_gkey = vvsl_cls.gkey
+    INNER JOIN [sparcsn4].[dbo].[argo_carrier_visit] as argo_cv ON vvsl_vd.vvd_gkey = argo_cv.cvcvd_gkey
+    INNER JOIN [sparcsn4].[dbo].[argo_visit_details] as argo_vd ON argo_vd.gkey = argo_cv.cvcvd_gkey
+    LEFT JOIN [sparcsn4].[dbo].[ref_carrier_service] as carrier_service_ib ON argo_vd.service = carrier_service_ib.gkey
+    LEFT JOIN [sparcsn4].[dbo].[ref_bizunit_scoped] as bizunit ON vvsl.owner_gkey = bizunit.gkey
+WHERE
+    argo_cv.phase IN ('20INBOUND','30ARRIVED','40WORKING') AND
+    argo_cv.carrier_mode = 'VESSEL' AND
+    argo_cv.id != 'BBK_PLUGIN'
+ORDER BY argo_cv.id ASC
 SQL;
     }
 

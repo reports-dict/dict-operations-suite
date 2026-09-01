@@ -6,21 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\VesselPlanOverride;
 use App\Models\VesselSchedule;
 use App\Services\Operations\VesselDashboard\VesselDashboardBoardService;
+use App\Services\Operations\VesselDashboard\VesselScheduleSyncService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class VesselDashboardDataController extends Controller
 {
-    /**
-     * Minimum similar_text() percentage for a fuzzy (non-exact) name match
-     * to be accepted - see findMatch(). Conservative on purpose: a false
-     * match links a schedule to the wrong vessel, which is worse than
-     * missing a match (the manual "Link to Vessel" picker in Management is
-     * the correction path for whatever this doesn't catch).
-     */
-    private const FUZZY_MATCH_THRESHOLD = 90.0;
-
     private array $overrideFields = [
         'total_planned_discharge',
         'discharge_plan_fcl_20ft',
@@ -41,8 +32,22 @@ class VesselDashboardDataController extends Controller
      * a raw exception to the unattended TV display, degrade to an empty
      * vessel list instead.
      */
-    public function __invoke(VesselDashboardBoardService $boardService): JsonResponse
-    {
+    public function __invoke(
+        VesselDashboardBoardService $boardService,
+        VesselScheduleSyncService $scheduleSyncService,
+    ): JsonResponse {
+        // Runs on every poll (60s, both the public board and Management) -
+        // see VesselScheduleSyncService's docblock for why this isn't a
+        // scheduled command. Best-effort like the schedules/vessels fetches
+        // below: a sparcsn4 hiccup here must not break the endpoint, it just
+        // means schedules stay whatever they were as of the last successful
+        // sync.
+        try {
+            $scheduleSyncService->sync();
+        } catch (\Throwable $e) {
+            Log::error('Vessel Schedule sync failed', ['error' => $e->getMessage()]);
+        }
+
         // Fetched independently of the sparcsn4 vessel query below - a
         // schedule-connection hiccup must never break the vessel board, and
         // conversely schedules must still be available (they're the board's
@@ -89,37 +94,6 @@ class VesselDashboardDataController extends Controller
             }
         }
 
-        // Auto-detect schedule lifecycle transitions against the live feed
-        // just fetched above - scheduled -> on_dock when a name match
-        // appears (exact first, then a conservative fuzzy fallback - see
-        // findMatch()), on_dock -> departed when its matched vessel drops
-        // out of the active list. A schedule entry has no shared key with
-        // sparcsn4 until it actually arrives, so this is inherently
-        // best-effort - see VesselDashboardManagementController's manual
-        // "Link to Vessel" action for the correction path.
-        $activeVesselsByName = collect($vessels)->keyBy(fn ($v) => mb_strtolower(trim($v->vessel_name)));
-        $activeIdList = $activeIds->all();
-
-        foreach ($schedules as $schedule) {
-            if ($schedule->status === 'scheduled') {
-                $match = $this->findMatch($schedule->vessel_name, $activeVesselsByName);
-                if ($match) {
-                    $schedule->update([
-                        'status' => 'on_dock',
-                        'matched_ob_ib_id' => $match->ob_ib_id,
-                        'on_dock_at' => now(),
-                    ]);
-                }
-            } elseif ($schedule->status === 'on_dock'
-                && $schedule->matched_ob_ib_id
-                && ! in_array($schedule->matched_ob_ib_id, $activeIdList, true)) {
-                $schedule->update([
-                    'status' => 'departed',
-                    'departed_at' => now(),
-                ]);
-            }
-        }
-
         // Fetch per-crane hourly move data for all active vessels in one batched SQL Server query
         $obIbIds = $activeIds->filter()->values()->all();
         $graphRowsByVessel = $boardService->fetchCraneGraph($obIbIds);
@@ -160,36 +134,5 @@ class VesselDashboardDataController extends Controller
             'schedules' => $schedules,
             'fetched_at' => now()->toISOString(),
         ]);
-    }
-
-    /**
-     * Exact (case-insensitive/trimmed) match first; if none, falls back to
-     * the best similar_text() match among currently active vessels, only
-     * accepted at or above FUZZY_MATCH_THRESHOLD - catches a typo/naming
-     * variation between a manually-typed schedule entry and the real
-     * SPARCS name without risking a confident-looking wrong match.
-     *
-     * @param  Collection<string, object>  $activeVesselsByName  keyed by lowercased/trimmed vessel_name
-     */
-    private function findMatch(string $scheduleName, Collection $activeVesselsByName): ?object
-    {
-        $needle = mb_strtolower(trim($scheduleName));
-
-        if ($exact = $activeVesselsByName->get($needle)) {
-            return $exact;
-        }
-
-        $best = null;
-        $bestPercent = 0.0;
-
-        foreach ($activeVesselsByName as $candidateName => $vessel) {
-            similar_text($needle, $candidateName, $percent);
-            if ($percent > $bestPercent) {
-                $bestPercent = $percent;
-                $best = $vessel;
-            }
-        }
-
-        return $bestPercent >= self::FUZZY_MATCH_THRESHOLD ? $best : null;
     }
 }

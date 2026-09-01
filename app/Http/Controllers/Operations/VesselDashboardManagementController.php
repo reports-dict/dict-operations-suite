@@ -85,8 +85,27 @@ class VesselDashboardManagementController extends Controller
         return back();
     }
 
+    /**
+     * A row with matched_ob_ib_id set is SPARCS-linked - VesselScheduleSyncService
+     * owns every field but estimated_moves for those (see its docblock), so
+     * only estimated_moves is accepted here for them. This is a server-side
+     * backstop for the same restriction the Management form already applies
+     * client-side (ScheduleForm renders an estimated-moves-only mini form
+     * for linked rows) - a stale tab shouldn't be able to overwrite
+     * sync-owned fields.
+     */
     public function storeSchedule(Request $request): RedirectResponse
     {
+        $id = $request->input('id');
+        $existing = $id ? VesselSchedule::find($id) : null;
+
+        if ($existing && $existing->matched_ob_ib_id) {
+            $validated = $request->validate(['estimated_moves' => 'required|integer|min:0']);
+            $existing->update($validated);
+
+            return back();
+        }
+
         $validated = $request->validate([
             'id' => 'nullable|integer',
             'service' => 'required|string|max:255',
@@ -98,11 +117,9 @@ class VesselDashboardManagementController extends Controller
             'loa_meters' => 'required|numeric|min:0',
             'berth_number' => 'nullable|string|max:50',
         ]);
-
-        $id = $validated['id'] ?? null;
         unset($validated['id']);
 
-        $id ? VesselSchedule::whereKey($id)->update($validated) : VesselSchedule::create($validated);
+        $existing ? $existing->update($validated) : VesselSchedule::create($validated);
 
         return back();
     }

@@ -12,7 +12,17 @@ const REFRESH_INTERVAL = 60;
 const SLIDE_INTERVAL = 30;
 const DRILLDOWN_AUTO_RESUME = 60;
 const MAX_GRID_COLUMNS = 5;
-const MAX_GRID_ROWS = 4;
+// Capped at 3, not higher - a 4th row only ever gets used at column counts
+// narrow enough (4-5 cols) that a card's real content height (padding +
+// badge + name + 2 dividers + ETB/ETD block + LOA/Berth/Moves block, per
+// ScheduleCard) exceeds what 4 equal rows of a typical kiosk display's
+// height can hold even at this card's smaller/narrower font sizes -
+// confirmed by testing with real synced schedule data (17 entries forced
+// into a 5x4 grid whose 3rd/4th rows scrolled off-screen with no visible
+// scrollbar affordance on an unattended TV). Capping at 3 keeps every
+// fit-mode row tall enough, and routes anything denser than
+// SCHEDULE_GRID_CAPACITY below into auto-scroll instead (below).
+const MAX_GRID_ROWS = 3;
 // Beyond this many entries, the fit-mode grid (below) can no longer shrink
 // cards to fit without scrolling - auto-scroll becomes mandatory rather
 // than optional past this point (see the `effectiveAutoScroll` derivation
@@ -572,18 +582,24 @@ export default function VesselDashboardBoard() {
                         // unlike the live vessel view below), in a fixed columns x rows grid
                         // sized to the entry count (scheduleGridDims). scheduleGridDims
                         // minimizes row count for the given total, so rows get as much real
-                        // height as possible - that's what actually keeps ScheduleCard's
-                        // @container/cqw content (which scales with column WIDTH only,
-                        // independent of row height) from exceeding an even 1fr row and
-                        // being silently clipped by the card's own overflow-hidden. The
-                        // minmax(300px, ...) floor is just a backstop for edge cases (e.g. a
-                        // vessel name wrapping to 2 lines), not the primary defense - 300px
-                        // is sized off the worst realistic case (5x4, near capacity). Cards
-                        // stretch via 1fr to fill the content area with no scrollbar in the
-                        // normal case; only if the floor binds in a genuinely dense case does
-                        // it exceed the container and scroll (overflow-y-auto below) instead
-                        // of clipping. gridAutoRows is the same treatment for counts beyond
-                        // the cap (see scheduleGridDims).
+                        // height as possible, but that alone isn't a guarantee - a row's fair
+                        // 1fr share can still undershoot a card's real content height (which
+                        // scales with column WIDTH via @container/cqw, independent of row
+                        // height) at some column counts, and 1fr doesn't grow past its fair
+                        // share to compensate. Rows use minmax(300px, auto) instead - auto
+                        // grows a row to fit its tallest card's real content, so nothing is
+                        // ever clipped by the card's own overflow-hidden, no matter how tall
+                        // that turns out to be. If the grid ends up shorter than the
+                        // container (typical - scheduleGridDims + MAX_GRID_ROWS=3 keep this
+                        // close to exact in most cases), alignContent centers it rather than
+                        // leaving a lopsided gap only at the bottom. If it ends up taller
+                        // (denser counts), it scrolls (overflow-y-auto below) - but
+                        // MAX_GRID_ROWS=3 keeps SCHEDULE_GRID_CAPACITY low enough that dense
+                        // counts route to auto-scroll mode instead before this matters (a
+                        // static scrollbar nobody can operate is not an acceptable fallback
+                        // on an unattended kiosk - confirmed by testing with 17 real synced
+                        // entries, which forced a 5x4 grid whose bottom rows scrolled off
+                        // screen with no visible affordance to reach them).
                         (() => {
                             const { columns, rows } = scheduleGridDims(visibleSchedules.length);
                             return (
@@ -591,8 +607,9 @@ export default function VesselDashboardBoard() {
                                     className="grid min-h-0 flex-1 gap-4 overflow-y-auto"
                                     style={{
                                         gridTemplateColumns: `repeat(${columns}, 1fr)`,
-                                        gridTemplateRows: `repeat(${rows}, minmax(300px, 1fr))`,
+                                        gridTemplateRows: `repeat(${rows}, minmax(300px, auto))`,
                                         gridAutoRows: 'minmax(300px, auto)',
+                                        alignContent: 'center',
                                     }}
                                 >
                                     {visibleSchedules.map((s, i) => (

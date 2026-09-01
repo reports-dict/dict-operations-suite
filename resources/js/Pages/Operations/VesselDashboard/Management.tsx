@@ -67,6 +67,7 @@ function OverrideForm({ vessel, onDone }: { vessel: VesselVisit; onDone: () => v
         });
         router.post('/operations/vessel-dashboard/overrides', body, {
             preserveScroll: true,
+            preserveState: true,
             onFinish: () => {
                 setSaving(false);
                 onDone();
@@ -78,6 +79,7 @@ function OverrideForm({ vessel, onDone }: { vessel: VesselVisit; onDone: () => v
         setSaving(true);
         router.delete(`/operations/vessel-dashboard/overrides/${encodeURIComponent(vessel.ob_ib_id)}`, {
             preserveScroll: true,
+            preserveState: true,
             onFinish: () => {
                 setSaving(false);
                 onDone();
@@ -288,6 +290,7 @@ function toDatetimeLocal(value: string): string {
 }
 
 function ScheduleForm({ schedule, onDone, onCancel }: { schedule?: VesselSchedule; onDone: () => void; onCancel: () => void }) {
+    const isLinked = Boolean(schedule?.matched_ob_ib_id);
     const [values, setValues] = useState({
         service: schedule?.service ?? '',
         line_operator: schedule?.line_operator ?? '',
@@ -305,28 +308,52 @@ function ScheduleForm({ schedule, onDone, onCancel }: { schedule?: VesselSchedul
 
     const handleSave = () => {
         setSaving(true);
-        router.post(
-            '/operations/vessel-dashboard/schedules',
-            {
-                id: schedule?.id,
-                service: values.service,
-                line_operator: values.line_operator,
-                vessel_name: values.vessel_name,
-                etb: values.etb,
-                etd: values.etd,
-                estimated_moves: Number(values.estimated_moves),
-                loa_meters: Number(values.loa_meters),
-                berth_number: values.berth_number || null,
+        const body = isLinked
+            ? { id: schedule!.id, estimated_moves: Number(values.estimated_moves) }
+            : {
+                  id: schedule?.id,
+                  service: values.service,
+                  line_operator: values.line_operator,
+                  vessel_name: values.vessel_name,
+                  etb: values.etb,
+                  etd: values.etd,
+                  estimated_moves: Number(values.estimated_moves),
+                  loa_meters: Number(values.loa_meters),
+                  berth_number: values.berth_number || null,
+              };
+        router.post('/operations/vessel-dashboard/schedules', body, {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => {
+                setSaving(false);
+                onDone();
             },
-            {
-                preserveScroll: true,
-                onFinish: () => {
-                    setSaving(false);
-                    onDone();
-                },
-            },
-        );
+        });
     };
+
+    // Sync-linked rows are fully SPARCS-sourced except Estimated Moves (see
+    // VesselScheduleSyncService) - only that field is editable here.
+    if (isLinked) {
+        return (
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                    Linked to a live SPARCS vessel - other fields sync automatically. Only Estimated Moves is editable here.
+                </p>
+                <div className="max-w-[200px]">
+                    <Label>Estimated Moves</Label>
+                    <Input type="number" min={0} value={values.estimated_moves} onChange={set('estimated_moves')} />
+                </div>
+                <div className="mt-4 flex gap-2">
+                    <Button variant="primary" onClick={handleSave} disabled={saving}>
+                        {saving ? 'Saving…' : 'Save'}
+                    </Button>
+                    <Button variant="secondary" onClick={onCancel} disabled={saving}>
+                        Cancel
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
@@ -418,6 +445,7 @@ function LinkVesselRow({
             { status: 'on_dock', matched_ob_ib_id: selected },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onFinish: () => {
                     setSaving(false);
                     onDone();
@@ -489,16 +517,34 @@ function ScheduleTableRow({
                 </td>
                 <td className="px-3 py-2.5">
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        {schedule.status !== 'departed' && (
-                            <Button variant="ghost" onClick={onLinkToggle}>
-                                {isLinking ? 'Close' : 'Link to Vessel'}
-                            </Button>
+                        {/* Sync-owned status for a linked row - matched_ob_ib_id came
+                            directly from SPARCS's own gkey, not a guess, so there's no
+                            "wrong match" here for Link to Vessel / Mark scheduled/on_dock
+                            to fix, and neither would stick anyway (the next sync just
+                            recomputes them from the live phase). Mark Departed is the one
+                            exception: it's a terminal state VesselScheduleSyncService
+                            skips resyncing once set (see upsertRow()), so it's offered for
+                            linked rows too and actually sticks. */}
+                        {schedule.matched_ob_ib_id ? (
+                            schedule.status !== 'departed' && (
+                                <Button variant="ghost" onClick={() => onStatusChange('departed')}>
+                                    Mark Departed
+                                </Button>
+                            )
+                        ) : (
+                            <>
+                                {schedule.status !== 'departed' && (
+                                    <Button variant="ghost" onClick={onLinkToggle}>
+                                        {isLinking ? 'Close' : 'Link to Vessel'}
+                                    </Button>
+                                )}
+                                {SCHEDULE_STATUS_OPTIONS.filter((s) => s !== schedule.status).map((s) => (
+                                    <Button key={s} variant="ghost" onClick={() => onStatusChange(s)}>
+                                        Mark {SCHEDULE_STATUS_LABELS[s]}
+                                    </Button>
+                                ))}
+                            </>
                         )}
-                        {SCHEDULE_STATUS_OPTIONS.filter((s) => s !== schedule.status).map((s) => (
-                            <Button key={s} variant="ghost" onClick={() => onStatusChange(s)}>
-                                Mark {SCHEDULE_STATUS_LABELS[s]}
-                            </Button>
-                        ))}
                         <Button variant="secondary" onClick={onEditToggle}>
                             {isEditing ? 'Close' : 'Edit'}
                         </Button>
@@ -568,12 +614,17 @@ function VesselSchedulePanel() {
     const handleDelete = (id: number) => {
         router.delete(`/operations/vessel-dashboard/schedules/${id}`, {
             preserveScroll: true,
+            preserveState: true,
             onFinish: fetchData,
         });
     };
 
     const handleStatusChange = (id: number, status: VesselSchedule['status']) => {
-        router.post(`/operations/vessel-dashboard/schedules/${id}/status`, { status }, { preserveScroll: true, onFinish: fetchData });
+        router.post(
+            `/operations/vessel-dashboard/schedules/${id}/status`,
+            { status },
+            { preserveScroll: true, preserveState: true, onFinish: fetchData },
+        );
     };
 
     const toggleStatusFilter = (status: VesselSchedule['status']) => {
