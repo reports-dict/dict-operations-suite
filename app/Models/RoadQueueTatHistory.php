@@ -15,6 +15,7 @@ class RoadQueueTatHistory extends Model
         'status',
         'avg_tat',
         'avg_tat_seconds',
+        'container_count',
         'recorded_at',
     ];
 

@@ -196,4 +196,38 @@ class RoadQueueEcdBoardService
 
         return $rows[0]->avg_tat ?? null;
     }
+
+    /**
+     * Distinct containers that completed OUTGATE within the shift - same
+     * FROM/JOIN backbone and category/freight_kind/sub_type scope as
+     * fetchTat(), but keyed only on rtvd.exited_yard rather than
+     * rtvd.created - "processed" means finished and exited within the
+     * shift, independent of the TAT figure's own start-timestamp window.
+     */
+    public function fetchContainersProcessedCount(string $shiftStart, string $shiftEnd): int
+    {
+        $sql = <<<'SQL'
+            SELECT COUNT(DISTINCT unit.id) AS container_count
+            FROM [sparcsn4].[dbo].[inv_unit] AS unit
+            INNER JOIN [sparcsn4].[dbo].[inv_unit_fcy_visit] AS fcy_visit
+                ON unit.gkey = fcy_visit.unit_gkey
+            LEFT JOIN [sparcsn4].[dbo].[road_truck_transactions] AS tk_transactions
+                ON unit.gkey = tk_transactions.unit_gkey
+            LEFT JOIN [sparcsn4].[dbo].[road_truck_visit_details] AS rtvd
+                ON tk_transactions.truck_visit_gkey = rtvd.tvdtls_gkey
+            WHERE
+                unit.category = 'STRGE' AND unit.freight_kind = 'MTY' AND tk_transactions.sub_type = 'DM'
+                AND tk_transactions.status = 'COMPLETE'
+                AND tk_transactions.stage_id = 'OUTGATE'
+                AND rtvd.exited_yard >= :shift_start
+                AND rtvd.exited_yard < :shift_end
+            SQL;
+
+        $rows = DB::connection('sparcsn4')->select($sql, [
+            'shift_start' => $shiftStart,
+            'shift_end' => $shiftEnd,
+        ]);
+
+        return (int) ($rows[0]->container_count ?? 0);
+    }
 }

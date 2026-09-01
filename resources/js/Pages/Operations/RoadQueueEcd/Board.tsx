@@ -25,6 +25,9 @@ interface Props {
     error?: string | null;
     debug_error?: string | null;
     tat?: string | null;
+    containersProcessed?: number | null;
+    containersProcessedCurrentShift?: number | null;
+    currentShiftLabel?: string | null;
     shiftLabel?: string | null;
     shiftRange?: string | null;
 }
@@ -96,6 +99,9 @@ export default function RoadQueueEcdBoard({
     error = null,
     debug_error = null,
     tat = null,
+    containersProcessed = null,
+    containersProcessedCurrentShift = null,
+    currentShiftLabel = null,
     shiftLabel = null,
     shiftRange = null,
 }: Props) {
@@ -185,6 +191,20 @@ export default function RoadQueueEcdBoard({
 
     let content: ReactNode;
 
+    // Extracted so it can render both inline in the main view's header (next
+    // to Last Updated) and in the empty-queue state below - it disappeared
+    // from the empty-queue view when first moved into the header, since that
+    // header only exists in the main data-view branch, not the empty one.
+    const currentShiftBanner = (
+        <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-2 py-1 sm:px-3 sm:py-1.5">
+            <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-green-500" />
+            <span className="text-xs font-semibold tracking-wide text-green-700 uppercase sm:text-sm">
+                {currentShiftLabel ?? 'Current Shift'}:
+            </span>
+            <span className="text-xl font-bold text-green-800 sm:text-2xl lg:text-3xl">{containersProcessedCurrentShift ?? '—'}</span>
+        </div>
+    );
+
     const tatBanner = (
         <div className="mb-2 rounded border border-indigo-200 bg-indigo-50 p-3 shadow">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -195,6 +215,10 @@ export default function RoadQueueEcdBoard({
                     <p className="mt-0.5 text-xs text-indigo-500">{shiftRange ?? '—'}</p>
                 </div>
                 <div className="text-xl font-bold text-indigo-900 sm:text-2xl lg:text-3xl">{tat ?? 'No data'}</div>
+            </div>
+            <div className="mt-2 border-t border-indigo-200 pt-2 text-right">
+                <span className="text-xs font-semibold tracking-wide text-indigo-500 uppercase">Containers Processed</span>{' '}
+                <span className="text-lg font-bold text-indigo-900">{containersProcessed ?? '—'}</span>
             </div>
         </div>
     );
@@ -228,6 +252,7 @@ export default function RoadQueueEcdBoard({
         content = (
             <div className={`${contentMinHeight}bg-gray-50 px-1 py-2 sm:px-2 lg:px-3`}>
                 <div className="w-full">
+                    <div className="mb-2 flex justify-end">{currentShiftBanner}</div>
                     {tatBanner}
                     <div className="rounded border border-yellow-200 bg-yellow-50 p-3">
                         <h1 className="mb-2 text-base font-bold text-yellow-800 sm:text-lg lg:text-xl">
@@ -255,6 +280,7 @@ export default function RoadQueueEcdBoard({
                                 <p className="mt-1 text-gray-600">View and manage planned deliveries and receipts</p>
                             </div>
                             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-4">
+                                {currentShiftBanner}
                                 <div className="text-right text-[11px] leading-snug sm:text-sm">
                                     <div>
                                         <span className="font-semibold text-blue-700">Last Updated: </span>

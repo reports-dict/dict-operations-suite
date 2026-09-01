@@ -1,14 +1,40 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ScheduleCard from '@/Components/ScheduleCard';
 import VesselCard from '@/Components/VesselCard';
 import VesselHourDetailModal from '@/Components/VesselHourDetailModal';
 import { SharedProps } from '@/types';
 import { usePage } from '@inertiajs/react';
+import { ArrowDownUp, CalendarClock, Ship } from 'lucide-react';
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { DashboardDataResponse, VesselVisit } from './types';
+import { DashboardDataResponse, VesselSchedule, VesselVisit } from './types';
 
 const REFRESH_INTERVAL = 60;
 const SLIDE_INTERVAL = 30;
 const DRILLDOWN_AUTO_RESUME = 60;
+const MAX_GRID_COLUMNS = 5;
+const MAX_GRID_ROWS = 4;
+// Beyond this many entries, the fit-mode grid (below) can no longer shrink
+// cards to fit without scrolling - auto-scroll becomes mandatory rather
+// than optional past this point (see the `effectiveAutoScroll` derivation
+// in the component), since nobody at an unattended kiosk can operate a
+// static scrollbar.
+const SCHEDULE_GRID_CAPACITY = MAX_GRID_COLUMNS * MAX_GRID_ROWS;
+
+type ViewMode = 'vessels' | 'schedule';
+
+// Near-square columns/rows computed purely from the entry count (no pixel
+// measurement - matches this module's existing fixed-sizing precedent, see
+// VesselBarChart.tsx's own comment on the same point) so the schedule grid
+// always exactly fills the available area with no scrollbar for any
+// realistic count - this is a kiosk/TV board, nobody can scroll it. Capped
+// at MAX_GRID_COLUMNS x MAX_GRID_ROWS; beyond that, extra entries fall into
+// an auto-generated row sized by content instead of shrinking indefinitely,
+// which naturally re-enables scrolling as a graceful fallback.
+function scheduleGridDims(total: number) {
+    const columns = Math.min(MAX_GRID_COLUMNS, Math.max(1, Math.ceil(Math.sqrt(total))));
+    const rows = Math.min(MAX_GRID_ROWS, Math.max(1, Math.ceil(total / columns)));
+    return { columns, rows };
+}
 
 interface Drilldown {
     obIbId: string;
@@ -146,10 +172,50 @@ function FullscreenButton({ isFullscreen, onToggle }: { isFullscreen: boolean; o
     );
 }
 
+function ViewToggleButton({ viewMode, onToggle }: { viewMode: ViewMode; onToggle: () => void }) {
+    return (
+        <button
+            onClick={onToggle}
+            className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-500 hover:text-white sm:px-3 sm:py-2 sm:text-sm"
+            title={viewMode === 'vessels' ? 'Switch to Schedule view' : 'Switch to Vessel view'}
+        >
+            {viewMode === 'vessels' ? <CalendarClock className="h-4 w-4" /> : <Ship className="h-4 w-4" />}
+            <span className="hidden sm:inline">{viewMode === 'vessels' ? 'Schedule View' : 'Vessel View'}</span>
+        </button>
+    );
+}
+
+// `active` is the effective on/off state (manual OR forced-by-overflow);
+// `forced` disables the click - turning it off wouldn't be honored anyway
+// once entries exceed SCHEDULE_GRID_CAPACITY, so the button reflects that
+// instead of pretending it's a normal toggle in that state.
+function AutoScrollToggleButton({ active, forced, onToggle }: { active: boolean; forced: boolean; onToggle: () => void }) {
+    return (
+        <button
+            onClick={forced ? undefined : onToggle}
+            disabled={forced}
+            className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs transition-colors sm:px-3 sm:py-2 sm:text-sm ${
+                active
+                    ? 'border-cyan-500 bg-cyan-900/40 text-cyan-300 hover:border-cyan-400'
+                    : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500 hover:text-white'
+            } ${forced ? 'cursor-not-allowed' : ''}`}
+            title={forced ? 'Auto-scroll is required - too many entries to fit on screen' : active ? 'Turn off auto-scroll' : 'Turn on auto-scroll'}
+        >
+            <ArrowDownUp className="h-4 w-4" />
+            <span className="hidden sm:inline">
+                Auto-Scroll: {active ? 'On' : 'Off'}
+                {forced ? ' (Required)' : ''}
+            </span>
+        </button>
+    );
+}
+
 export default function VesselDashboardBoard() {
     const { auth } = usePage<SharedProps>().props;
 
     const [vessels, setVessels] = useState<VesselVisit[]>([]);
+    const [schedules, setSchedules] = useState<VesselSchedule[]>([]);
+    const [viewMode, setViewMode] = useState<ViewMode>('vessels');
     const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
     const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
     const [fetching, setFetching] = useState(false);
@@ -160,33 +226,33 @@ export default function VesselDashboardBoard() {
     const [slideCountdown, setSlideCountdown] = useState(SLIDE_INTERVAL);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [drilldown, setDrilldown] = useState<Drilldown | null>(null);
+    const [autoScroll, setAutoScroll] = useState(false);
     const activeIdxRef = useRef(0);
     const vesselsRef = useRef<VesselVisit[]>([]);
+    const viewModeRef = useRef<ViewMode>('vessels');
+    const scheduleScrollRef = useRef<HTMLDivElement | null>(null);
+    // Starts true so the very first fetch (0 vessels before any data has
+    // loaded) is treated as "already empty" rather than a 0→0 transition -
+    // see the empty-state entry check in fetchData below.
+    const prevVesselsEmptyRef = useRef(true);
     const slideTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
     const slideTickRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
     const autoResumeRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-    const fetchData = useCallback(async () => {
-        setFetching(true);
-        setError(null);
-        try {
-            const res = await fetch('/operations/vessel-dashboard/data');
-            const json: DashboardDataResponse = await res.json();
-            const list = json.vessels || [];
-            vesselsRef.current = list;
-            setVessels(list);
-            setActiveIdx((prev) => {
-                const clamped = Math.min(prev, Math.max(0, list.length - 1));
-                activeIdxRef.current = clamped;
-                return clamped;
-            });
-            setFetchedAt(new Date());
-        } catch {
-            setError('Failed to fetch data. Retrying next cycle.');
-        } finally {
-            setFetching(false);
-        }
-    }, []);
+    // Departed schedules are history (see Management), not shown on the
+    // live board. On-dock ones stay visible (with their own badge/color in
+    // ScheduleCard) but are excluded from the green ETB-fade ranking below -
+    // that fade means "how soon is this upcoming," which no longer applies
+    // once a vessel is actually on dock.
+    const visibleSchedules = schedules.filter((s) => s.status !== 'departed');
+    const scheduledOnly = visibleSchedules.filter((s) => s.status === 'scheduled');
+
+    // Auto-scroll is either the user's manual choice, or mandatory once
+    // there are more entries than the fit-mode grid can shrink to fit
+    // (SCHEDULE_GRID_CAPACITY) - see AutoScrollToggleButton for how the
+    // header button reflects the forced case.
+    const scrollForced = visibleSchedules.length > SCHEDULE_GRID_CAPACITY;
+    const effectiveAutoScroll = autoScroll || scrollForced;
 
     const goTo = useCallback((idx: number, dir: 'left' | 'right' = 'left') => {
         setSlideDir(dir);
@@ -203,6 +269,9 @@ export default function VesselDashboardBoard() {
         clearInterval(slideTickRef.current);
         setSlideCountdown(SLIDE_INTERVAL);
         slideTimerRef.current = setInterval(() => {
+            // Schedule view shows every entry at once (a grid, not a
+            // slideshow) - only vessels rotate through activeIdx.
+            if (viewModeRef.current !== 'vessels') return;
             const total = vesselsRef.current.length;
             if (total <= 1) return;
             const next = (activeIdxRef.current + 1) % total;
@@ -212,6 +281,68 @@ export default function VesselDashboardBoard() {
             setSlideCountdown((prev) => (prev <= 1 ? SLIDE_INTERVAL : prev - 1));
         }, 1000);
     }, [goTo]);
+
+    // Switches which list the slideshow shows (vessels vs. schedule) -
+    // resets to the first entry and restarts the slide timer/countdown
+    // against the newly-active list's length. Used both by the manual
+    // toggle button and by fetchData's auto-switch below.
+    const switchView = useCallback(
+        (mode: ViewMode) => {
+            viewModeRef.current = mode;
+            setViewMode(mode);
+            activeIdxRef.current = 0;
+            setActiveIdx(0);
+            startSlideTimer();
+        },
+        [startSlideTimer],
+    );
+
+    const fetchData = useCallback(async () => {
+        setFetching(true);
+        setError(null);
+        try {
+            const res = await fetch('/operations/vessel-dashboard/data');
+            const json: DashboardDataResponse = await res.json();
+            const list = json.vessels || [];
+            const scheduleList = json.schedules || [];
+            vesselsRef.current = list;
+            setVessels(list);
+            setSchedules(scheduleList);
+
+            const wasEmpty = prevVesselsEmptyRef.current;
+            const isEmpty = list.length === 0;
+            prevVesselsEmptyRef.current = isEmpty;
+
+            if (isEmpty && viewModeRef.current === 'vessels') {
+                // No active vessels - default to the schedule view. Guarded
+                // on viewMode so this doesn't re-trigger (and reset the
+                // schedule slideshow's position) on every poll while
+                // already showing schedules.
+                switchView('schedule');
+            } else if (!isEmpty && wasEmpty && viewModeRef.current === 'schedule') {
+                // A vessel just arrived while the board was on schedule view
+                // (whichever way it got there) - never keep showing a stale
+                // schedule once live data exists again.
+                switchView('vessels');
+            } else if (viewModeRef.current === 'vessels') {
+                // Vessel count may have changed without an empty/non-empty
+                // transition - keep activeIdx in bounds. Schedules render as
+                // a grid (every entry at once), so activeIdx is irrelevant
+                // to them and needs no equivalent reclamp.
+                setActiveIdx((prev) => {
+                    const clamped = Math.min(prev, Math.max(0, list.length - 1));
+                    activeIdxRef.current = clamped;
+                    return clamped;
+                });
+            }
+
+            setFetchedAt(new Date());
+        } catch {
+            setError('Failed to fetch data. Retrying next cycle.');
+        } finally {
+            setFetching(false);
+        }
+    }, [switchView]);
 
     useEffect(() => {
         startSlideTimer();
@@ -268,11 +399,63 @@ export default function VesselDashboardBoard() {
         return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
     }, []);
 
+    // Drives the schedule grid's auto-scroll mode - a smooth, continuous
+    // scrollTop nudge each frame rather than a declarative CSS @keyframes
+    // animation (like WaveLoader's), since the scroll distance depends on
+    // the container's actual content height, which varies with the entry
+    // count and isn't known up front. Sweeps down to the bottom, reverses,
+    // sweeps back up to the top, and repeats. Position is tracked in `pos`
+    // (a plain JS number, full float precision) rather than by reading
+    // el.scrollTop back each frame - the DOM rounds scrollTop to a whole
+    // pixel on write, so a sub-1px SPEED added to a *read-back* value never
+    // accumulates (it rounds straight back down to the same integer every
+    // frame) and the element appears frozen even though the loop is running.
+    useEffect(() => {
+        if (!effectiveAutoScroll || viewMode !== 'schedule') return;
+
+        const el = scheduleScrollRef.current;
+        if (!el) return;
+
+        let frame: number;
+        let direction: 1 | -1 = 1;
+        let pos = el.scrollTop;
+        const SPEED = 0.25; // px/frame - slower than the original one-way loop's 0.6
+
+        const step = () => {
+            const maxScroll = el.scrollHeight - el.clientHeight;
+            if (maxScroll > 0) {
+                pos += SPEED * direction;
+                if (pos >= maxScroll) {
+                    pos = maxScroll;
+                    direction = -1;
+                } else if (pos <= 0) {
+                    pos = 0;
+                    direction = 1;
+                }
+                el.scrollTop = pos;
+            }
+            frame = requestAnimationFrame(step);
+        };
+        frame = requestAnimationFrame(step);
+
+        return () => cancelAnimationFrame(frame);
+    }, [effectiveAutoScroll, viewMode]);
+
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
         } else {
             document.exitFullscreen();
+        }
+    };
+
+    const toggleView = () => {
+        const next: ViewMode = viewModeRef.current === 'vessels' ? 'schedule' : 'vessels';
+        switchView(next);
+        if (next === 'vessels') {
+            // Manually switching back to Vessels should be as up-to-date as
+            // possible rather than waiting out the rest of the 60s countdown.
+            fetchData();
         }
     };
 
@@ -301,6 +484,10 @@ export default function VesselDashboardBoard() {
 
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {fetchedAt && <p className="hidden text-xs text-slate-500 sm:block">Updated {fetchedAt.toLocaleTimeString()}</p>}
+                    <ViewToggleButton viewMode={viewMode} onToggle={toggleView} />
+                    {viewMode === 'schedule' && (
+                        <AutoScrollToggleButton active={effectiveAutoScroll} forced={scrollForced} onToggle={() => setAutoScroll((v) => !v)} />
+                    )}
                     <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />
 
                     {/* Countdown badge */}
@@ -330,9 +517,83 @@ export default function VesselDashboardBoard() {
                 <div className="mx-2 mt-3 rounded-lg border border-red-700 bg-red-900/40 px-4 py-2 text-sm text-red-400 sm:mx-4 lg:mx-6">{error}</div>
             )}
 
-            {/* Vessel cards — full-screen slideshow */}
+            {/* Vessel/schedule cards — full-screen slideshow */}
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 sm:px-4 sm:py-3 lg:px-6 lg:py-3">
-                {vessels.length === 0 ? (
+                {viewMode === 'schedule' ? (
+                    visibleSchedules.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-6">
+                            <h2 className="text-2xl font-extrabold tracking-widest text-slate-500 uppercase sm:text-3xl lg:text-5xl">
+                                No Scheduled Vessels
+                            </h2>
+                            <p className="text-base tracking-wide text-slate-500 sm:text-lg lg:text-2xl">
+                                Add an upcoming vessel from the Management page.
+                            </p>
+                        </div>
+                    ) : effectiveAutoScroll ? (
+                        // Auto-scroll mode - either the user's manual choice, or forced once
+                        // entries exceed SCHEDULE_GRID_CAPACITY (see AutoScrollToggleButton).
+                        // Cards render at a fixed comfortable size rather than shrinking to
+                        // fit, and the container is left free to overflow - the whole point
+                        // is scrolling through it. The scrollTop-nudging effect above drives
+                        // the actual motion; the native scrollbar is hidden here since the
+                        // motion is programmatic,
+                        // not user-driven. Row height is a fixed 480px, not content-driven
+                        // (`auto`) - combining CSS Grid auto-track-sizing with this card's
+                        // @container/cqw text scaling under-measured the actual content
+                        // height, so rows came out too short and the LOA/Est. Moves block
+                        // spilled downward into the next row - fixed height (generous enough
+                        // for the widest 640px column, where cqw text is biggest) plus
+                        // ScheduleCard's own overflow-hidden sidesteps that entirely.
+                        <>
+                            <style>{`.schedule-scroll-hide::-webkit-scrollbar{display:none}.schedule-scroll-hide{scrollbar-width:none;-ms-overflow-style:none;}`}</style>
+                            <div
+                                ref={scheduleScrollRef}
+                                className="schedule-scroll-hide grid min-h-0 flex-1 auto-rows-[480px] grid-cols-[repeat(auto-fit,minmax(360px,640px))] justify-center gap-4 overflow-y-auto"
+                            >
+                                {visibleSchedules.map((s, i) => (
+                                    <ScheduleCard
+                                        key={s.id}
+                                        schedule={s}
+                                        displayIndex={i + 1}
+                                        rank={s.status === 'scheduled' ? scheduledOnly.findIndex((x) => x.id === s.id) : 0}
+                                        total={scheduledOnly.length || 1}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        // All upcoming/on-dock vessels shown at once (not a slideshow,
+                        // unlike the live vessel view below), in a fixed columns x rows grid
+                        // sized to the entry count (scheduleGridDims) - every card gets an
+                        // equal 1fr share of the real available area, so it always fills the
+                        // content area with no scrollbar rather than however many columns
+                        // happen to fit at a fixed per-card pixel size. gridAutoRows is the
+                        // fallback for counts beyond the cap (see scheduleGridDims).
+                        (() => {
+                            const { columns, rows } = scheduleGridDims(visibleSchedules.length);
+                            return (
+                                <div
+                                    className="grid min-h-0 flex-1 gap-4 overflow-y-auto"
+                                    style={{
+                                        gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                                        gridTemplateRows: `repeat(${rows}, 1fr)`,
+                                        gridAutoRows: 'minmax(200px, auto)',
+                                    }}
+                                >
+                                    {visibleSchedules.map((s, i) => (
+                                        <ScheduleCard
+                                            key={s.id}
+                                            schedule={s}
+                                            displayIndex={i + 1}
+                                            rank={s.status === 'scheduled' ? scheduledOnly.findIndex((x) => x.id === s.id) : 0}
+                                            total={scheduledOnly.length || 1}
+                                        />
+                                    ))}
+                                </div>
+                            );
+                        })()
+                    )
+                ) : vessels.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-6">
                         <h2 className="text-2xl font-extrabold tracking-widest text-slate-500 uppercase sm:text-3xl lg:text-5xl">
                             No Active Vessel Visits
@@ -394,7 +655,7 @@ export default function VesselDashboardBoard() {
 
             {/* Footer */}
             <footer className="flex flex-wrap items-center gap-2 border-t border-slate-700/50 px-2 py-1 text-[10px] text-slate-500 sm:gap-3 sm:px-4 sm:text-xs lg:px-6">
-                <span>Data source: N4 SPARCS</span>
+                <span>Data source: {viewMode === 'vessels' ? 'N4 SPARCS' : 'Manually scheduled'}</span>
                 <span>•</span>
                 <span>Auto-refreshes every {REFRESH_INTERVAL}s</span>
             </footer>

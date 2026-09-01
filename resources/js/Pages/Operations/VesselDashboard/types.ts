@@ -68,8 +68,27 @@ export interface VesselVisit {
     graph: VesselGraphEntry[] | null;
 }
 
+export type ScheduleStatus = 'scheduled' | 'on_dock' | 'departed';
+
+export interface VesselSchedule {
+    id: number;
+    service: string;
+    line_operator: string;
+    vessel_name: string;
+    etb: string;
+    etd: string;
+    estimated_moves: number;
+    loa_meters: string; // decimal cast serializes as a fixed-precision string, e.g. "250.00"
+    berth_number: string | null;
+    status: ScheduleStatus;
+    matched_ob_ib_id: string | null;
+    on_dock_at: string | null;
+    departed_at: string | null;
+}
+
 export interface DashboardDataResponse {
     vessels: VesselVisit[];
+    schedules: VesselSchedule[];
     fetched_at: string;
 }
 

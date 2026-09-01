@@ -33,4 +33,23 @@ return [
         // that live, shared connection.
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Vessel Schedule connection
+    |--------------------------------------------------------------------------
+    |
+    | Which database connection App\Models\VesselSchedule reads/writes.
+    | Defaults to the shared production vessel_dashboard connection (see
+    | config/database.php) - VesselSchedule is a brand-new table with no
+    | pre-existing production schema (unlike VesselVisit/VesselPlanOverride),
+    | so unlike those, migrating it there is intentional here. Override to
+    | 'mysql' in a local .env during development/testing so schedule data
+    | and migrations land in this app's own database instead of the real
+    | external one - useful since a developer's local .env may already
+    | point VESSEL_DB_HOST at the real production box.
+    |
+    */
+
+    'vessel_schedule_connection' => env('VESSEL_SCHEDULE_CONNECTION', 'vessel_dashboard'),
+
 ];

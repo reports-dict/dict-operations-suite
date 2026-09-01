@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\VesselPlanOverride;
+use App\Models\VesselSchedule;
 use App\Models\VesselSyncLog;
 use App\Models\VesselVisit;
 use App\Services\Operations\VesselDashboard\VesselVisitSyncService;
@@ -80,6 +81,71 @@ class VesselDashboardManagementController extends Controller
     public function syncNow(VesselVisitSyncService $service): RedirectResponse
     {
         $service->sync('manual');
+
+        return back();
+    }
+
+    public function storeSchedule(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'id' => 'nullable|integer',
+            'service' => 'required|string|max:255',
+            'line_operator' => 'required|string|max:255',
+            'vessel_name' => 'required|string|max:255',
+            'etb' => 'required|date',
+            'etd' => 'required|date|after:etb',
+            'estimated_moves' => 'required|integer|min:0',
+            'loa_meters' => 'required|numeric|min:0',
+            'berth_number' => 'nullable|string|max:50',
+        ]);
+
+        $id = $validated['id'] ?? null;
+        unset($validated['id']);
+
+        $id ? VesselSchedule::whereKey($id)->update($validated) : VesselSchedule::create($validated);
+
+        return back();
+    }
+
+    public function destroySchedule(int $id): RedirectResponse
+    {
+        VesselSchedule::destroy($id);
+
+        return back();
+    }
+
+    /**
+     * Manual escape hatch for the automatic on-dock/departed name-matching
+     * in VesselDashboardDataController - a schedule's vessel_name not
+     * matching sparcsn4 exactly (typo, abbreviation, naming difference)
+     * would otherwise have no recovery path.
+     */
+    public function updateScheduleStatus(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:scheduled,on_dock,departed',
+            // Optional - supplied by Management's "Link to Vessel" picker so a
+            // manually-forced on_dock still has a real matched_ob_ib_id, and
+            // therefore still auto-transitions to departed later the same way
+            // an auto-matched entry does. Ignored for scheduled/departed.
+            'matched_ob_ib_id' => 'nullable|string|max:255',
+        ]);
+
+        $update = ['status' => $validated['status']];
+
+        match ($validated['status']) {
+            // Reset clears the match so the entry is eligible for fresh
+            // auto-matching again rather than staying pinned to a stale one.
+            'scheduled' => $update += ['matched_ob_ib_id' => null, 'on_dock_at' => null, 'departed_at' => null],
+            'on_dock' => $update += [
+                'matched_ob_ib_id' => $validated['matched_ob_ib_id'] ?? null,
+                'on_dock_at' => now(),
+                'departed_at' => null,
+            ],
+            'departed' => $update += ['departed_at' => now()],
+        };
+
+        VesselSchedule::whereKey($id)->update($update);
 
         return back();
     }

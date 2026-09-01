@@ -30,13 +30,29 @@ class RoadQueueEcdBoardController extends Controller
 
             $queue = $boardService->fetchQueue();
             $tat = $boardService->fetchTat($shift['start'], $shift['end']);
+            $containersProcessed = $boardService->fetchContainersProcessedCount($shift['start'], $shift['end']);
 
-            $captureService->captureTatHistory($shift, $tat);
+            // Live running count for whichever shift is currently in
+            // progress - separate from $shift above (the previous
+            // *completed* shift the TAT figure is scoped to).
+            // currentInProgress() returns Carbon objects, not the
+            // pre-formatted strings current() returns, so format them the
+            // same way before binding as SQL params.
+            $inProgress = $shiftCalculator->currentInProgress();
+            $containersProcessedCurrentShift = $boardService->fetchContainersProcessedCount(
+                $inProgress['start']->format('Y-m-d H:i:s').'.000',
+                $inProgress['end']->format('Y-m-d H:i:s').'.000',
+            );
+
+            $captureService->captureTatHistory($shift, $tat, $containersProcessed);
             $captureService->captureHighElapsedTransactions($queue);
 
             return Inertia::render('Operations/RoadQueueEcd/Board', [
                 'roadQueues' => $queue,
                 'tat' => $tat,
+                'containersProcessed' => $containersProcessed,
+                'containersProcessedCurrentShift' => $containersProcessedCurrentShift,
+                'currentShiftLabel' => $inProgress['label'],
                 'shiftLabel' => $shift['label'],
                 'shiftRange' => $shift['range'],
             ]);

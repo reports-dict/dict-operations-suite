@@ -98,6 +98,13 @@ Route::prefix('operations')->middleware(['web', 'auth', 'allowed'])->group(funct
             ->name('operations.vessel-dashboard.overrides.destroy');
         Route::post('sync-now', [VesselDashboardManagementController::class, 'syncNow'])
             ->name('operations.vessel-dashboard.sync-now');
+
+        Route::post('schedules', [VesselDashboardManagementController::class, 'storeSchedule'])
+            ->name('operations.vessel-dashboard.schedules.store');
+        Route::delete('schedules/{id}', [VesselDashboardManagementController::class, 'destroySchedule'])
+            ->name('operations.vessel-dashboard.schedules.destroy');
+        Route::post('schedules/{id}/status', [VesselDashboardManagementController::class, 'updateScheduleStatus'])
+            ->name('operations.vessel-dashboard.schedules.status');
     });
 
     // The live board for this module is intentionally public - see

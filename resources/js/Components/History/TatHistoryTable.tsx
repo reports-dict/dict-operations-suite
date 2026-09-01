@@ -49,6 +49,9 @@ export default function TatHistoryTable({ rows, showStatus = false, emptyMessage
                                 Seconds
                             </th>
                             <th className="px-4 py-2.5 text-xs font-semibold whitespace-nowrap text-slate-500 uppercase dark:text-slate-400">
+                                Containers
+                            </th>
+                            <th className="px-4 py-2.5 text-xs font-semibold whitespace-nowrap text-slate-500 uppercase dark:text-slate-400">
                                 Recorded At
                             </th>
                         </tr>
@@ -73,6 +76,9 @@ export default function TatHistoryTable({ rows, showStatus = false, emptyMessage
                                 </td>
                                 <td className="px-4 py-2.5 tabular-nums whitespace-nowrap text-slate-600 dark:text-slate-300">
                                     {row.avg_tat_seconds}
+                                </td>
+                                <td className="px-4 py-2.5 tabular-nums whitespace-nowrap text-slate-600 dark:text-slate-300">
+                                    {row.container_count ?? '—'}
                                 </td>
                                 <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatPH(row.recorded_at)}</td>
                             </tr>

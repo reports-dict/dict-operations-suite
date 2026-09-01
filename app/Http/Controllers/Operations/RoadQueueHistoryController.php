@@ -42,7 +42,10 @@ class RoadQueueHistoryController extends Controller
 
         return Response::streamDownload(function () use ($records) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID', 'Shift', 'Shift Start (PH)', 'Shift End (PH)', 'Status', 'Avg TAT', 'Avg TAT (seconds)', 'Recorded At (PH)']);
+            fputcsv($handle, [
+                'ID', 'Shift', 'Shift Start (PH)', 'Shift End (PH)', 'Status', 'Avg TAT', 'Avg TAT (seconds)',
+                'Containers Processed', 'Recorded At (PH)',
+            ]);
             foreach ($records as $row) {
                 fputcsv($handle, [
                     $row->id,
@@ -52,6 +55,7 @@ class RoadQueueHistoryController extends Controller
                     $row->status,
                     $row->avg_tat,
                     $row->avg_tat_seconds,
+                    $row->container_count,
                     $this->toPh($row->recorded_at),
                 ]);
             }

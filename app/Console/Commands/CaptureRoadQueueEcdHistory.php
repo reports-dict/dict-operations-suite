@@ -36,7 +36,8 @@ class CaptureRoadQueueEcdHistory extends Command
 
             if (! $onlyHighElapsed) {
                 $tat = $boardService->fetchTat($shift['start'], $shift['end']);
-                $captureService->captureTatHistory($shift, $tat);
+                $containersProcessed = $boardService->fetchContainersProcessedCount($shift['start'], $shift['end']);
+                $captureService->captureTatHistory($shift, $tat, $containersProcessed);
                 $this->line("  road-queue-ecd: captured TAT history for shift {$shift['label']}");
             }
 

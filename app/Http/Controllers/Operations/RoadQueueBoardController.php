@@ -31,15 +31,31 @@ class RoadQueueBoardController extends Controller
             $queue = $boardService->fetchQueue();
             $tatPrecheckToOutgate = $boardService->fetchPrecheckToOutgateTat($shift['start'], $shift['end']);
             $tatIngateToOutgate = $boardService->fetchIngateToOutgateTat($shift['start'], $shift['end']);
+            $containersProcessed = $boardService->fetchContainersProcessedCount($shift['start'], $shift['end']);
 
-            $captureService->captureTatHistory($shift, 'precheck_to_outgate', $tatPrecheckToOutgate);
-            $captureService->captureTatHistory($shift, 'ingate_to_outgate', $tatIngateToOutgate);
+            // Live running count for whichever shift is currently in
+            // progress - separate from $shift above (the previous
+            // *completed* shift the TAT figures are scoped to).
+            // currentInProgress() returns Carbon objects, not the
+            // pre-formatted strings current() returns, so format them the
+            // same way before binding as SQL params.
+            $inProgress = $shiftCalculator->currentInProgress();
+            $containersProcessedCurrentShift = $boardService->fetchContainersProcessedCount(
+                $inProgress['start']->format('Y-m-d H:i:s').'.000',
+                $inProgress['end']->format('Y-m-d H:i:s').'.000',
+            );
+
+            $captureService->captureTatHistory($shift, 'precheck_to_outgate', $tatPrecheckToOutgate, $containersProcessed);
+            $captureService->captureTatHistory($shift, 'ingate_to_outgate', $tatIngateToOutgate, $containersProcessed);
             $captureService->captureHighElapsedTransactions($queue);
 
             return Inertia::render('Operations/RoadQueue/Board', [
                 'roadQueues' => $queue,
                 'tatPrecheckToOutgate' => $tatPrecheckToOutgate,
                 'tatIngateToOutgate' => $tatIngateToOutgate,
+                'containersProcessed' => $containersProcessed,
+                'containersProcessedCurrentShift' => $containersProcessedCurrentShift,
+                'currentShiftLabel' => $inProgress['label'],
                 'shiftLabel' => $shift['label'],
                 'shiftRange' => $shift['range'],
             ]);

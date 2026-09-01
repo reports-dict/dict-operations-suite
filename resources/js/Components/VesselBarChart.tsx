@@ -2,7 +2,7 @@ import { MousePointerClick } from 'lucide-react';
 import { Bar, CartesianGrid, ComposedChart, Legend, LabelList, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { VesselGraphEntry } from '@/Pages/Operations/VesselDashboard/types';
 
-const THRESHOLD = 20;
+const THRESHOLD = 25;
 const GAP = 1; // 1px inset per touching edge = 2px surface gap between stacked segments
 
 type CraneKey = 'QC1' | 'QC2' | 'QC3' | 'QC4' | 'UNKR' | 'ECIN';
@@ -241,13 +241,13 @@ export default function VesselBarChart({ graphData, vesselName, onBarClick }: Ve
                             );
                         })}
 
-                        {/* 20 moves/hour threshold line */}
+                        {/* 25 moves/hour threshold line */}
                         <ReferenceLine
                             y={THRESHOLD}
                             stroke="#38bdf8"
                             strokeWidth={2.5}
                             strokeDasharray="8 4"
-                            label={{ value: '20 moves/hr', position: 'insideTopRight', fill: '#38bdf8', fontSize: REF_SIZE, fontWeight: 700 }}
+                            label={{ value: '25 moves/hr', position: 'insideTopRight', fill: '#38bdf8', fontSize: REF_SIZE, fontWeight: 700 }}
                         />
 
                         <Legend

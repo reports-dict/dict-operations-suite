@@ -16,7 +16,7 @@ class RoadQueueCaptureService
      * without any separate job. Wrapped in try/catch per-record so a capture
      * failure never breaks the public board render.
      */
-    public function captureTatHistory(array $shift, string $status, ?string $avgTat): void
+    public function captureTatHistory(array $shift, string $status, ?string $avgTat, ?int $containerCount = null): void
     {
         try {
             $tatSeconds = 0;
@@ -34,6 +34,7 @@ class RoadQueueCaptureService
                     'shift_label' => $shift['label'],
                     'avg_tat' => $avgTat,
                     'avg_tat_seconds' => $tatSeconds,
+                    'container_count' => $containerCount,
                     'recorded_at' => now(),
                 ]
             );

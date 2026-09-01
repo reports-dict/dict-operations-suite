@@ -37,9 +37,10 @@ class CaptureRoadQueueHistory extends Command
             if (! $onlyHighElapsed) {
                 $tatPrecheckToOutgate = $boardService->fetchPrecheckToOutgateTat($shift['start'], $shift['end']);
                 $tatIngateToOutgate = $boardService->fetchIngateToOutgateTat($shift['start'], $shift['end']);
+                $containersProcessed = $boardService->fetchContainersProcessedCount($shift['start'], $shift['end']);
 
-                $captureService->captureTatHistory($shift, 'precheck_to_outgate', $tatPrecheckToOutgate);
-                $captureService->captureTatHistory($shift, 'ingate_to_outgate', $tatIngateToOutgate);
+                $captureService->captureTatHistory($shift, 'precheck_to_outgate', $tatPrecheckToOutgate, $containersProcessed);
+                $captureService->captureTatHistory($shift, 'ingate_to_outgate', $tatIngateToOutgate, $containersProcessed);
                 $this->line("  road-queue: captured TAT history for shift {$shift['label']}");
             }
 

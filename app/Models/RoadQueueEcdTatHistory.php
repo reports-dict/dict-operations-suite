@@ -14,6 +14,7 @@ class RoadQueueEcdTatHistory extends Model
         'shift_end',
         'avg_tat',
         'avg_tat_seconds',
+        'container_count',
         'recorded_at',
     ];
 

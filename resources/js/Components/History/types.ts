@@ -16,6 +16,7 @@ export interface TatHistoryRow {
     status?: 'precheck_to_outgate' | 'ingate_to_outgate';
     avg_tat: string | null;
     avg_tat_seconds: number;
+    container_count: number | null;
     recorded_at: string;
 }
 
