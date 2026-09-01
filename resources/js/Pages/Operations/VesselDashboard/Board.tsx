@@ -501,7 +501,11 @@ export default function VesselDashboardBoard() {
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {fetchedAt && <p className="hidden text-xs text-slate-500 sm:block">Updated {fetchedAt.toLocaleTimeString()}</p>}
                     <ViewToggleButton viewMode={viewMode} onToggle={toggleView} />
-                    {viewMode === 'schedule' && (
+                    {/* Hidden for now - scheduleFeedQuery() is currently capped at TOP 3,
+                        so the schedule grid never gets dense enough for auto-scroll to be
+                        relevant. Toggle back on by restoring this block once the cap is
+                        lifted/raised. */}
+                    {false && viewMode === 'schedule' && (
                         <AutoScrollToggleButton active={effectiveAutoScroll} forced={scrollForced} onToggle={() => setAutoScroll((v) => !v)} />
                     )}
                     <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} />

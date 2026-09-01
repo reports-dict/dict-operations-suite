@@ -24,7 +24,7 @@ const metaLabel = 'text-[clamp(0.7rem,0.7rem_+_0.5cqw,1.1rem)] tracking-widest t
 const metaValue = 'text-[clamp(0.8rem,0.8rem_+_0.6cqw,1.25rem)] font-bold text-emerald-50';
 const eventLabel = 'text-[clamp(0.7rem,0.7rem_+_0.6cqw,1.15rem)] font-semibold tracking-widest text-emerald-200/60 uppercase';
 const eventTime = 'mt-1 text-[clamp(1.25rem,1.25rem_+_2.2cqw,3.5rem)] font-extrabold text-white';
-const eventDate = 'text-[clamp(0.8rem,0.8rem_+_0.9cqw,1.5rem)] font-semibold text-emerald-100/80';
+const eventDate = 'text-[clamp(1.25rem,1.25rem_+_2.2cqw,3.5rem)] font-semibold text-emerald-100/80';
 const statLabel = 'text-[clamp(0.65rem,0.65rem_+_0.5cqw,1rem)] tracking-widest text-emerald-200/60 uppercase';
 const statValue = 'mt-1 text-[clamp(1rem,1rem_+_1.3cqw,2.25rem)] font-extrabold text-white';
 

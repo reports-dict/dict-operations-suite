@@ -314,7 +314,10 @@ SQL;
     private function scheduleFeedQuery(): string
     {
         return <<<'SQL'
-SELECT
+DECLARE @PHToday DATE = CAST(DATEADD(HOUR, 8, GETUTCDATE()) AS DATE);
+
+SELECT 
+TOP 3
     argo_cv.gkey,
     vvsl.name as vessel_name,
     CAST(ROUND(vvsl_cls.loa_cm / 100.0, 2) AS DECIMAL(10,2)) as loa_meters,
@@ -335,8 +338,9 @@ FROM
 WHERE
     argo_cv.phase IN ('20INBOUND','30ARRIVED','40WORKING') AND
     argo_cv.carrier_mode = 'VESSEL' AND
-    argo_cv.id != 'BBK_PLUGIN'
-ORDER BY argo_cv.id ASC
+    argo_cv.id != 'BBK_PLUGIN' AND
+    argo_vd.eta >= DATEADD(DAY, -3, @PHToday)
+ORDER BY argo_vd.eta ASC;
 SQL;
     }
 

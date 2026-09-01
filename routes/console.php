@@ -19,6 +19,14 @@ Schedule::command('operations:sync-driver-assignment')->dailyAt('20:00');
 
 Schedule::command('operations:sync-vessel-dashboard')->hourly();
 
+// Keeps vessel_schedules synced from sparcsn4 even when nobody has the
+// public kiosk board or Management page open (both also sync on every
+// load/poll - see VesselDashboardDataController - but the board may be
+// powered off for a stretch, e.g. off-hours, so this is the backup
+// baseline). Hourly matches the sibling operations:sync-vessel-dashboard
+// job just above, for the same module/connection.
+Schedule::command('operations:sync-vessel-schedule')->hourly();
+
 // 5 minutes matches the source app's proven cadence (see
 // local-simplified-xps-v2's MSSQL_SYNC_SETUP.md / sync-containers.bat).
 Schedule::command('app:sync-container-yard')->everyFiveMinutes()->withoutOverlapping();
