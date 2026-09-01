@@ -564,11 +564,20 @@ export default function VesselDashboardBoard() {
                     ) : (
                         // All upcoming/on-dock vessels shown at once (not a slideshow,
                         // unlike the live vessel view below), in a fixed columns x rows grid
-                        // sized to the entry count (scheduleGridDims) - every card gets an
-                        // equal 1fr share of the real available area, so it always fills the
-                        // content area with no scrollbar rather than however many columns
-                        // happen to fit at a fixed per-card pixel size. gridAutoRows is the
-                        // fallback for counts beyond the cap (see scheduleGridDims).
+                        // sized to the entry count (scheduleGridDims). Rows use
+                        // minmax(200px, auto) rather than a bare 1fr - ScheduleCard's
+                        // @container/cqw text scales with column WIDTH only, independent of
+                        // whatever row height an even 1fr split happens to produce, so at
+                        // large fullscreen pixel dimensions a card's real content height
+                        // could exceed its 1fr row and get silently clipped by the card's own
+                        // overflow-hidden. auto sizes each row to its tallest card's actual
+                        // content instead, so nothing is ever clipped; the 200px floor keeps
+                        // sparse rows from collapsing. This usually still exactly fills the
+                        // content area with no scrollbar, but in dense near-capacity cases
+                        // where rows collectively need more height than the screen has, it
+                        // now scrolls (overflow-y-auto below) instead of clipping - visible
+                        // data beats an invisible-unless-you-zoom-out board. gridAutoRows is
+                        // the same treatment for counts beyond the cap (see scheduleGridDims).
                         (() => {
                             const { columns, rows } = scheduleGridDims(visibleSchedules.length);
                             return (
@@ -576,8 +585,9 @@ export default function VesselDashboardBoard() {
                                     className="grid min-h-0 flex-1 gap-4 overflow-y-auto"
                                     style={{
                                         gridTemplateColumns: `repeat(${columns}, 1fr)`,
-                                        gridTemplateRows: `repeat(${rows}, 1fr)`,
+                                        gridTemplateRows: `repeat(${rows}, minmax(200px, auto))`,
                                         gridAutoRows: 'minmax(200px, auto)',
+                                        alignContent: 'center',
                                     }}
                                 >
                                     {visibleSchedules.map((s, i) => (
