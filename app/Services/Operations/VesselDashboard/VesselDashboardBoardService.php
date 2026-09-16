@@ -398,6 +398,7 @@ ECINData AS (
     WHERE unit.declrd_ib_cv IN ({$inPlaceholders})
       AND (unit.category = 'IMPRT' OR unit.category = 'TRSHP')
       AND fcy_visit.transit_state = 'S30_ECIN'
+      AND fcy_visit.restow_typ IN ('NONE','RESTOW')
       AND fcy_visit.time_rnd >= @StartHour
     GROUP BY unit.declrd_ib_cv, DATEADD(HOUR, DATEDIFF(HOUR, 0, fcy_visit.time_rnd), 0)
 ),
