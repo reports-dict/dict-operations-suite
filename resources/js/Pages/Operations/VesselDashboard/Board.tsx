@@ -29,6 +29,15 @@ const MAX_GRID_ROWS = 3;
 // in the component), since nobody at an unattended kiosk can operate a
 // static scrollbar.
 const SCHEDULE_GRID_CAPACITY = MAX_GRID_COLUMNS * MAX_GRID_ROWS;
+// scheduleFeedQuery() (VesselDashboardBoardService.php) is no longer capped
+// at TOP 3 - that cap fed VesselScheduleSyncService.markDeparted(), which
+// marks any active schedule missing from the feed as departed (a terminal
+// state the sync never revives), so every vessel outside the top 3 was
+// getting wrongly marked departed. The kiosk board, though, still only ever
+// wants to show the next few upcoming/on-dock vessels, so that cap moves
+// here instead - applied display-side, after filtering out departed
+// entries, so Management (which reads the full unfiltered list) is unaffected.
+const BOARD_SCHEDULE_LIMIT = 3;
 
 type ViewMode = 'vessels' | 'schedule';
 
@@ -279,7 +288,7 @@ export default function VesselDashboardBoard() {
     // ScheduleCard) but are excluded from the green ETB-fade ranking below -
     // that fade means "how soon is this upcoming," which no longer applies
     // once a vessel is actually on dock.
-    const visibleSchedules = schedules.filter((s) => s.status !== 'departed');
+    const visibleSchedules = schedules.filter((s) => s.status !== 'departed').slice(0, BOARD_SCHEDULE_LIMIT);
     const scheduledOnly = visibleSchedules.filter((s) => s.status === 'scheduled');
 
     // Auto-scroll is either the user's manual choice, or mandatory once
@@ -530,10 +539,10 @@ export default function VesselDashboardBoard() {
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {fetchedAt && <p className="hidden text-xs text-slate-500 sm:block">Updated {fetchedAt.toLocaleTimeString()}</p>}
                     <ViewToggleButton viewMode={viewMode} onToggle={toggleView} />
-                    {/* Hidden for now - scheduleFeedQuery() is currently capped at TOP 3,
-                        so the schedule grid never gets dense enough for auto-scroll to be
-                        relevant. Toggle back on by restoring this block once the cap is
-                        lifted/raised. */}
+                    {/* Hidden for now - the board display is capped at BOARD_SCHEDULE_LIMIT
+                        (3), so the schedule grid never gets dense enough for auto-scroll to
+                        be relevant. Toggle back on by restoring this block if that display
+                        cap is ever lifted/raised. */}
                     {false && viewMode === 'schedule' && (
                         <AutoScrollToggleButton active={effectiveAutoScroll} forced={scrollForced} onToggle={() => setAutoScroll((v) => !v)} />
                     )}

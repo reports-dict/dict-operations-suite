@@ -316,8 +316,7 @@ SQL;
         return <<<'SQL'
 DECLARE @PHToday DATE = CAST(DATEADD(HOUR, 8, GETUTCDATE()) AS DATE);
 
-SELECT 
-TOP 3
+SELECT
     argo_cv.gkey,
     vvsl.name as vessel_name,
     CAST(ROUND(vvsl_cls.loa_cm / 100.0, 2) AS DECIMAL(10,2)) as loa_meters,
