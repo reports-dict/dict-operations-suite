@@ -1,0 +1,64 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+# Runner is the production host itself (see docker-compose.prod.yml) - only
+# one deploy should ever run at a time there, and a second push arriving
+# mid-deploy should wait its turn rather than race or cancel a deploy that's
+# already partway through `docker compose up`.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  # Persistent clone on the runner/production host - NOT the ephemeral
+  # actions/checkout workspace. .env.production lives here too (never
+  # committed, see Non-Goals in APP REQUIREMENT.md), which is also why this
+  # job `git pull`s in place instead of using actions/checkout (whose
+  # default clean step would wipe it). Verify/adjust this path for the
+  # actual host before relying on this workflow.
+  APP_DIR: /var/www/dict-operations-suite
+  COMPOSE_CMD: docker compose -f docker-compose.prod.yml
+  APP_CONTAINER: dict_ops_app_prod
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Pull latest code
+        run: |
+          cd $APP_DIR
+          git pull origin main
+
+      # Rebuilds the `production` Dockerfile target (frontend assets + PHP
+      # deps, see Dockerfile) and (re)creates app/scheduler/nginx from
+      # docker-compose.prod.yml. Image is tagged dict-operations-suite-prod:latest
+      # and shared by both the app and scheduler services, so this only
+      # builds once per deploy even though two services use it.
+      - name: Build and start containers
+        run: |
+          cd $APP_DIR
+          $COMPOSE_CMD up -d --build --remove-orphans
+
+      # --force skips the interactive "are you sure" prompt (no TTY here).
+      # Safe to run on every deploy - Laravel's migration table tracks what's
+      # already applied, so a deploy with no new migrations is a no-op.
+      - name: Run database migrations
+        run: docker exec $APP_CONTAINER php artisan migrate --force
+
+      # Clears any stale route/config/view cache from the previous image
+      # before rebuilding optimized caches against the newly deployed code.
+      - name: Refresh application caches
+        run: |
+          docker exec $APP_CONTAINER php artisan optimize:clear
+          docker exec $APP_CONTAINER php artisan optimize
+
+      # Keeps superseded image layers from piling up on the host across
+      # repeated deploys. -f skips the confirmation prompt; only dangling
+      # (untagged) images are removed, never anything currently in use by a
+      # running container.
+      - name: Prune superseded images
+        run: docker image prune -f
